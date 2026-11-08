@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block header_actions %}
+  <button type="button" id="new-chat" class="btn btn-secondary">New chat</button>
+{% endblock %}
+
+{% block content %}
+<section class="chat-card" aria-label="Chat with Medicare Helper">
+
+  <!-- Messages appear here. aria-live makes screen readers announce new answers. -->
+  <div id="messages" class="messages" aria-live="polite">
+    <div class="message message-bot">
+      <p class="message-label">Medicare Helper</p>
+      <div class="message-text">Hello! I can help you understand Medicare in plain language.
+Ask me anything about coverage, costs, or signing up.</div>
+    </div>
+
+    {% for msg in history %}
+      <div class="message {% if msg.role == 'user' %}message-user{% else %}message-bot{% endif %}">
+        <p class="message-label">{% if msg.role == 'user' %}You{% else %}Medicare Helper{% endif %}</p>
+        <div class="message-text">{{ msg.content }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Example questions: shown only when the chat is empty -->
+  <div id="examples" class="examples" {% if history %}hidden{% endif %}>
+    <p class="examples-title">Try asking:</p>
+    <div class="chips">
+      {% for example in examples %}
+        <button type="button" class="chip">{{ example }}</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <form id="ask-form" class="ask-form">
+    {% csrf_token %}
+    <label for="question" class="visually-hidden">Type your question</label>
+    <textarea id="question" name="question" rows="2" maxlength="1000"
+              placeholder="Type your question here…" required></textarea>
+    <button type="submit" id="send" class="btn btn-primary">Send</button>
+  </form>
+  <p class="hint">Press Enter to send. Press Shift + Enter for a new line.</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'chat/chat.js' %}"></script>
+{% endblock %}

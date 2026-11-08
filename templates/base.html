@@ -1,0 +1,49 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Medicare Helper{% endblock %}</title>
+  <!-- Atkinson Hyperlegible: a font designed for readers with low vision -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'chat/style.css' %}">
+</head>
+<body>
+  <a class="skip-link" href="#question">Skip to the question box</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9z"/>
+            <path d="M12 10v5M9.5 12.5h5"/>
+          </svg>
+        </span>
+        <div>
+          <h1 class="brand-title">Medicare Helper</h1>
+          <p class="brand-subtitle">Simple answers to your Medicare questions</p>
+        </div>
+      </div>
+      {% block header_actions %}{% endblock %}
+    </div>
+  </header>
+
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>General information only, not official Medicare advice.
+        For help with your plan, call <a href="tel:18006334227">1-800-MEDICARE</a> or visit
+        <a href="https://www.medicare.gov" target="_blank" rel="noopener">Medicare.gov</a>.</p>
+    </div>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
