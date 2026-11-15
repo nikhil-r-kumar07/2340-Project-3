@@ -23,4 +23,34 @@ If asked about something else, kindly say you can only help with Medicare questi
 say so clearly. Suggest they visit Medicare.gov or call 1-800-MEDICARE (1-800-633-4227).
 - Never make up costs, dates, or rules. If you don't know a number, say so."""
 
-# TODO (Story 3): add retrieved Medicare.gov / CMS passages to the prompt so answers are grounded.
+# (Story 3): add retrieved Medicare.gov / CMS passages to the prompt so answers are grounded.
+
+GROUNDING_RULES = """
+
+Using the official Medicare documents below:
+- Base your answer ONLY on the passages below. Do not add facts, numbers, or dates that are not in them.
+- After each fact, put the number of the passage it came from in square brackets, like [1] or [2].
+- If the passages do not answer the question, say plainly that you could not find it in your \
+Medicare documents, and suggest Medicare.gov or 1-800-MEDICARE (1-800-633-4227). Do not guess.
+
+Passages:
+{passages}"""
+
+#if nothing matched - tells the model not to answer from memory
+NO_PASSAGES_RULES = """
+
+No passage in your Medicare documents matched this question. Do not answer it from memory. \
+If it is a greeting or a thank-you, reply briefly and offer to help. Otherwise, say kindly that you \
+could not find that in your Medicare documents, and suggest Medicare.gov or 1-800-MEDICARE \
+(1-800-633-4227). You may suggest rephrasing the question."""
+
+#system prompt + each passage labeled with its citation number like [1] (from "title", page 5)
+def build_system_prompt(passages):
+    if not passages:
+        return SYSTEM_PROMPT + NO_PASSAGES_RULES
+
+    blocks = [
+        f"[{p.number}] (from \"{p.title}\", page {p.page})\n{p.text}"
+        for p in passages
+    ]
+    return SYSTEM_PROMPT + GROUNDING_RULES.format(passages="\n\n".join(blocks))

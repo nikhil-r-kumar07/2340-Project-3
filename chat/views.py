@@ -9,13 +9,18 @@ The conversation is stored in the user's session (a cookie-linked record in
 the database), so each visitor has their own chat without needing an account.
 """
 import json
+import logging
+import re
 
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_POST
 
+from . import rag
 from .llm import LLMError, chat_completion
-from .prompts import SYSTEM_PROMPT
+from .prompts import build_system_prompt
+
+logger = logging.getLogger(__name__)
 
 MAX_QUESTION_LENGTH = 1000
 HISTORY_LIMIT = 10  # how many past messages to send the model for context
@@ -56,9 +61,22 @@ def ask(request):
     # 2. Build the message list: instructions + recent conversation + new question
     history = request.session.get("history", [])
     # TODO (Story 3/4): retrieve relevant Medicare passages here and include them + their sources.
+    previous = next((m["content"] for m in reversed(history) if m["role"] == "user"), None)
+    try:
+        passages = rag.search_conversation(question, previous)
+    except Exception:
+        #dont fall back to an ungrounded answer if search breaks, just show an error
+        logger.exception("Retrieval failed")
+        return JsonResponse(
+            {"error": "Sorry, I can't look up Medicare information right now. Please try again in a minute."},
+            status=503,
+        )
+    sources = rag.number_sources(passages)
+    recent = [{"role": m["role"], "content": m["content"]} for m in history[-HISTORY_LIMIT:]]
+    
     messages = (
-        [{"role": "system", "content": SYSTEM_PROMPT}]
-        + history[-HISTORY_LIMIT:]
+        [{"role": "system", "content": build_system_prompt(passages)}]
+        + recent
         + [{"role": "user", "content": question}]
     )
 
@@ -71,15 +89,21 @@ def ask(request):
             status=503,
         )
 
+    answer = normalize_citations(answer)
+    cited = {int(n) for n in re.findall(r"\[(\d+)\]", answer)}
+    sources = [s for s in sources if s["number"] in cited]
+
     # 4. Save both turns so follow-up questions have context
     history += [
         {"role": "user", "content": question},
-        {"role": "assistant", "content": answer},
+        {"role": "assistant", "content": answer, "sources": sources},
     ]
     request.session["history"] = history
 
-    return JsonResponse({"answer": answer})
+    return JsonResponse({"answer": answer, "sources": sources})
 
+def normalize_citations(answer):
+    return re.sub(r"【(\d+)[^】]*】", r"[\1]", answer)
 
 @require_POST
 def reset(request):

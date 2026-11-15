@@ -87,3 +87,11 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "")
+
+# Rag settings (stories 3 + 4)
+DATA_DIR = BASE_DIR / "data" #sources.json and its listed pdfs
+CHROMA_DIR = BASE_DIR / "chroma_db" #ChromaDB's on disk vector store
+EMBED_CACHE_DIR = BASE_DIR / ".model_cache" #fastembed model files
+EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4")) #passages given to the model per question
+RAG_MAX_DISTANCE = float(os.getenv("RAG_MAX_DISTANCE", "0.45")) #max rag distance. passages past this is ignored

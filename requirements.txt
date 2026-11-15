@@ -1,3 +1,21 @@
 Django>=5.0,<6.0
 requests>=2.31
 python-dotenv>=1.0
+
+# RAG (Stories 3 + 4)
+fastembed>=0.9,<1.0      # bge-small-en-v1.5 via ONNX, so no PyTorch
+pypdf>=5.0               # reads the Medicare PDFs during ingestion
+
+#ChromaDB is installed separately with no dependencies because its full dependency list includes server-only packages which blows past PythonAnywhere's disk quota.
+#List of things the embedded client needs
+pydantic>=2.0
+pydantic-settings>=2.0
+overrides>=7.3
+tenacity>=8.2
+pybase64>=1.4
+jsonschema>=4.19
+orjson>=3.9
+pyyaml>=6.0
+opentelemetry-api>=1.2
+opentelemetry-sdk>=1.2
+opentelemetry-exporter-otlp-proto-grpc>=1.2

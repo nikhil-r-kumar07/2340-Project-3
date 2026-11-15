@@ -12,6 +12,21 @@ from django.test import TestCase
 from django.urls import reverse
 
 from .llm import LLMError
+from . import rag
+from .llm import LLMError
+from .prompts import build_system_prompt
+
+
+#fake default search result to use in tests
+def fake_passage(text="Part B covers doctor visits.", page=5, distance=0.2):
+    return rag.Passage(
+        text=text,
+        title="Medicare & You",
+        url="https://www.medicare.gov/publications/10050-medicare-and-you.pdf",
+        page=page,
+        distance=distance,
+    )
+
 
 
 class ChatPageTests(TestCase):
@@ -22,6 +37,11 @@ class ChatPageTests(TestCase):
 
 
 class AskApiTests(TestCase):
+    def setUp(self):
+        #every test gets a fake default passage unless it sets its own
+        patcher = patch("chat.views.rag.search_conversation", return_value=[fake_passage()])
+        self.mock_search = patcher.start()
+        self.addCleanup(patcher.stop)
     def post_question(self, question):
         return self.client.post(
             reverse("ask"),
@@ -38,6 +58,7 @@ class AskApiTests(TestCase):
 
         history = self.client.session["history"]
         self.assertEqual(history[0], {"role": "user", "content": "What does Part B cover?"})
+        self.assertEqual(history[1]["sources"], response.json()["sources"])
         self.assertEqual(history[1]["role"], "assistant")
 
         # The system prompt is sent first, the question last.
@@ -52,6 +73,9 @@ class AskApiTests(TestCase):
 
         sent_messages = mock_llm.call_args[0][0]
         self.assertIn({"role": "user", "content": "What is Part B?"}, sent_messages)
+
+        self.mock_search.assert_called_with("How much does it cost?", "What is Part B?")
+        self.assertTrue(all(set(m) == {"role", "content"} for m in sent_messages))
 
     def test_empty_question_rejected(self):
         response = self.post_question("   ")
@@ -73,3 +97,98 @@ class AskApiTests(TestCase):
         response = self.client.post(reverse("reset"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.client.session["history"], [])
+
+
+    #story 3 - answers are grounded in the documents
+
+    @patch("chat.views.chat_completion", return_value="Part B covers doctor visits [1].")
+    def test_passages_are_put_in_the_system_prompt(self, mock_llm):
+        self.post_question("What does Part B cover?")
+        system_prompt = mock_llm.call_args[0][0][0]["content"]
+        self.assertIn("Part B covers doctor visits.", system_prompt)
+        self.assertIn("[1]", system_prompt)
+        self.assertIn("ONLY", system_prompt)
+
+    @patch("chat.views.chat_completion", return_value="I couldn't find that.")
+    def test_no_matching_passages_tells_model_not_to_guess(self, mock_llm):
+        self.mock_search.return_value = []
+        response = self.post_question("Who won the Super Bowl?")
+        system_prompt = mock_llm.call_args[0][0][0]["content"]
+        self.assertIn("Do not answer it from memory", system_prompt)
+        self.assertEqual(response.json()["sources"], [])
+
+    @patch("chat.views.chat_completion")
+    def test_search_failure_returns_friendly_error(self, mock_llm):
+        self.mock_search.side_effect = RuntimeError("store missing")
+        with self.assertLogs("chat.views", level="ERROR"):
+            response = self.post_question("What is Medicare?")
+        self.assertEqual(response.status_code, 503)
+        mock_llm.assert_not_called()
+
+    #story 4 - user can see the sources
+
+    @patch("chat.views.chat_completion", return_value="Answer [1] [2].")
+    def test_sources_are_returned_with_page_links(self, mock_llm):
+        self.mock_search.return_value = [
+            fake_passage(page=5),
+            fake_passage(text="More about Part B.", page=5), #same page so same source
+            fake_passage(text="Part D covers drugs.", page=80),
+        ]
+        sources = self.post_question("What does Part B cover?").json()["sources"]
+        self.assertEqual(len(sources), 2)
+        self.assertEqual(sources[0]["number"], 1)
+        self.assertEqual(sources[0]["title"], "Medicare & You")
+        self.assertTrue(sources[0]["url"].endswith(".pdf#page=5"))
+        self.assertEqual(sources[1]["number"], 2)
+        self.assertEqual(sources[1]["page"], 80)
+
+    @patch("chat.views.chat_completion", return_value="Part B covers visits [2].")
+    def test_only_cited_sources_are_shown(self, mock_llm):
+        self.mock_search.return_value = [fake_passage(page=5), fake_passage(page=6)]
+        sources = self.post_question("What does Part B cover?").json()["sources"]
+        self.assertEqual([s["number"] for s in sources], [2])
+
+    @patch("chat.views.chat_completion", return_value="Sorry, I can only help with Medicare.")
+    def test_uncited_answer_shows_no_sources(self, mock_llm):
+        sources = self.post_question("Who won the Super Bowl?").json()["sources"]
+        self.assertEqual(sources, [])
+
+    @patch("chat.views.chat_completion", return_value="Part B covers visits【1】 and tests【1†source】.")
+    def test_odd_citation_brackets_are_normalized(self, mock_llm):
+        data = self.post_question("What does Part B cover?").json()
+        self.assertEqual(data["answer"], "Part B covers visits[1] and tests[1].")
+        self.assertEqual(len(data["sources"]), 1)
+
+    @patch("chat.views.chat_completion", return_value="Answer [1].")
+    def test_sources_show_after_reload(self, mock_llm):
+        self.post_question("What does Part B cover?")
+        response = self.client.get(reverse("index"))
+        self.assertContains(response, "Where this answer came from")
+        self.assertContains(response, "10050-medicare-and-you.pdf#page=5")
+
+
+#tests for the helper functions in rag.py
+class RagHelperTests(TestCase):
+    def test_chunks_are_limited_in_size_and_overlap(self):
+        text = " ".join(f"Sentence number {i} is about Medicare." for i in range(200))
+        chunks = rag.split_into_chunks(text, size=300, overlap=50)
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(c) <= 300 for c in chunks))
+        #neighboring chunks share some text so ideas dont get cut in half
+        self.assertIn(chunks[0][-20:].split()[-1], chunks[1])
+
+    def test_short_text_is_skipped(self):
+        self.assertEqual(rag.split_into_chunks("Page 4"), [])
+
+    def test_number_sources_shares_numbers_for_same_page(self):
+        passages = [fake_passage(page=1), fake_passage(page=2), fake_passage(page=1)]
+        sources = rag.number_sources(passages)
+        self.assertEqual([p.number for p in passages], [1, 2, 1])
+        self.assertEqual([s["page"] for s in sources], [1, 2])
+
+    def test_system_prompt_labels_passages_with_their_numbers(self):
+        passages = [fake_passage(text="Alpha text."), fake_passage(text="Beta text.", page=9)]
+        rag.number_sources(passages)
+        prompt = build_system_prompt(passages)
+        self.assertIn("[1] (from \"Medicare & You\", page 5)\nAlpha text.", prompt)
+        self.assertIn("[2] (from \"Medicare & You\", page 9)\nBeta text.", prompt)

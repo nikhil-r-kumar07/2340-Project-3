@@ -12,7 +12,7 @@ const csrfToken = form.querySelector("[name=csrfmiddlewaretoken]").value;
 
 // Add a chat bubble. We use textContent (not innerHTML) so model output
 // can never inject HTML or scripts into the page.
-function addMessage(role, text) {
+function addMessage(role, text, sources = []) {
   const wrapper = document.createElement("div");
   wrapper.className = role === "user" ? "message message-user" : "message message-bot";
   if (role === "error") wrapper.classList.add("message-error");
@@ -26,9 +26,38 @@ function addMessage(role, text) {
   body.textContent = text;
 
   wrapper.append(label, body);
+  // add sources list under answers that have them
+  if (sources.length) {
+    wrapper.appendChild(buildSources(sources));
+  }
   messages.appendChild(wrapper);
   messages.scrollTop = messages.scrollHeight;
   return wrapper;
+}
+
+function buildSources(sources) {
+  const box = document.createElement("div");
+  box.className = "sources";
+
+  const heading = document.createElement("p");
+  heading.className = "sources-title";
+  heading.textContent = "Where this answer came from:";
+  const list = document.createElement("ol");
+  list.className = "sources-list";
+  for (const source of sources) {
+    const item = document.createElement("li");
+    item.value = source.number;
+    const link = document.createElement("a");
+    //only allow real http/https links so nothing like javascript: gets in
+    link.href = /^https?:\/\//.test(source.url) ? source.url : "#";
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = source.page ? `${source.title}, page ${source.page}` : source.title;
+    item.appendChild(link);
+    list.appendChild(item);
+  }
+  box.append(heading, list);
+  return box;
 }
 
 async function postJSON(url, data) {
@@ -57,7 +86,7 @@ async function askQuestion(question) {
   try {
     const result = await postJSON("/api/ask/", { question });
     thinking.remove();
-    addMessage("bot", result.answer);
+    addMessage("bot", result.answer, result.sources || []);
   } catch (error) {
     thinking.remove();
     addMessage("error", error.message || "Sorry, something went wrong. Please try again.");

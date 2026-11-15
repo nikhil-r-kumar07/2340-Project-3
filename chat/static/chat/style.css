@@ -123,6 +123,25 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .message-bot .message-text { background: var(--bot-bubble); color: var(--bot-text); border-bottom-left-radius: 4px; }
 .message-error .message-text { background: var(--error-bg); color: var(--error-text); }
 
+
+/* sources box under answers (story 4) */
+.sources {
+  margin-top: 8px;
+  padding: 10px 16px;
+  border-left: 4px solid var(--primary);
+  background: var(--surface);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 1rem;
+}
+.sources-title { margin: 0 0 4px; font-weight: 700; color: var(--muted); }
+.sources-list { margin: 0; padding-left: 1.6em; }
+.sources-list li { margin: 4px 0; }
+/* underlined links + visible focus outline so theyre easy to see and use with a keyboard */
+.sources-list a { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.sources-list a:hover { color: var(--primary-hover); }
+.sources-list a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+
 /* "Thinking…" dots */
 .typing::after {
   content: "…";

@@ -6,25 +6,43 @@ CS 2340 Project 3.
 **Sprint 1 so far:**
 - **Story 1:** reach the chatbot through a web app.
 - **Story 2:** ask natural-language Medicare questions and get relevant answers.
+- **Story 3:** answers are grounded in official Medicare.gov documents.
+- **Story 4:** each answer lists the documents and pages it came from, with links to them.
+
 
 ## Tech stack
 - **Django 5:** web server, pages and sessions, with SQLite.
 - **Plain HTML/CSS/JavaScript:** no build step.
 - **LLM:** OpenAI's open-weights `gpt-oss-120b`, hosted free on [Groq](https://console.groq.com).
   - It's called through the standard OpenAI-compatible chat API using `requests` (`chat/llm.py`).
+- **RAG:** ChromaDB vector store + `BAAI/bge-small-en-v1.5` embeddings run through fastembed (ONNX, so no PyTorch), with `pypdf` for reading PDFs.
 
 ## Setup
 ```bash
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+pip install --no-deps "chromadb==1.5.*"
 cp .env.example .env              # then put your own Groq API key in .env
 python manage.py migrate
+python manage.py ingest
 python manage.py runserver
 ```
 Open http://127.0.0.1:8000.
 
 Each teammate should create their own free Groq key, since rate limits are per key.
+
+
+### Why `--no-deps` for ChromaDB?
+A plain `pip install chromadb` installs server-only packages like kubernetes, which is about 520 MB. This is more than PythonAnywhere's free disk quota.
+We only use Chroma's embedded `PersistentClient`, so `requirements.txt` lists just what that needs. This comes to about 350 MB total.
+
+## The dataset
+- `data/sources.json` lists each document's file, title, and official URL. The PDFs are in `data/docs/`.
+- To add a document, add it to `sources.json` and run `python manage.py ingest`. Missing PDFs are downloaded from their URL.
+- `python manage.py ingest --reset` rebuilds the store from scratch.
+- Current documents (all from medicare.gov/publications): Medicare & You, Your Medicare Benefits, Medicare Costs, Understanding Medicare Advantage Plans, Your Guide to Medicare Prescription Drug Coverage, Choosing a Medigap Policy.
+
 
 ## Switching models
 Edit `.env` only. No code changes are needed.
@@ -39,13 +57,18 @@ Edit `.env` only. No code changes are needed.
 ```bash
 python manage.py test chat
 ```
-The tests use a fake model, so they need no internet connection or API key.
+The tests use a fake model, so they need no internet connection or API key. They also use fake search so they need no `manage.py ingest`.
 
 ## How a question flows
 1. `chat/static/chat/chat.js` sends the question to `POST /api/ask/`.
-2. `chat/views.py` (`ask`) checks the question. It then builds the message list: system prompt + last 10 messages + the new question.
-3. `chat/llm.py` (`chat_completion`) sends that list to the LLM and returns the reply text.
-4. The view saves the conversation in the session and returns the answer as JSON. The page then shows it.
+2. `chat/views.py` (`ask`) checks the question.
+3. `chat/rag.py` (`search_conversation`) finds the closest Medicare passages in ChromaDB.
+   - Follow-ups are also searched together with the previous question.
+   - Passages with a cosine distance over 0.45 are ignored.
+4. `chat/prompts.py` (`build_system_prompt`) puts the numbered passages in the system prompt, telling the model to answer only from them and cite them like [1].
+5. `chat/llm.py` (`chat_completion`) sends system prompt + last 10 messages + the question to the LLM.
+6. The view keeps only the sources the answer cites, saves the conversation, and returns `{answer, sources}`.
+   - The page shows each source as a link to the PDF page.
 
 ## Project layout
 | File | What it does | Story |
@@ -59,12 +82,12 @@ The tests use a fake model, so they need no internet connection or API key.
 | `chat/views.py` | `index`, `ask` and `reset` endpoints | 2 |
 | `chat/llm.py` | The only code that talks to the LLM | 2 |
 | `chat/prompts.py` | System prompt: plain language, Medicare-only, safe | 2 |
-| `chat/tests.py` | Automated tests | 2 |
+| `chat/tests.py` | Automated tests | 2-4 |
+| `chat/rag.py` | Embeddings, ChromaDB, chunking, search | 3 |
+| `chat/management/commands/ingest.py` | `manage.py ingest`: loads `data/` into ChromaDB | 3 |
+| `data/sources.json`, `data/docs/` | The curated Medicare.gov dataset | 3 |
 
 ## Coming next
-- RAG with ChromaDB and the `bge-small-en-v1.5` embeddings (stories 3–7).
-- Source citations.
-- Data ingestion.
 - Admin controls.
 - Text-size and high-contrast modes.
 - Read-aloud.

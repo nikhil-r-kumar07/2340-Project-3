@@ -20,8 +20,22 @@ Ask me anything about coverage, costs, or signing up.</div>
       <div class="message {% if msg.role == 'user' %}message-user{% else %}message-bot{% endif %}">
         <p class="message-label">{% if msg.role == 'user' %}You{% else %}Medicare Helper{% endif %}</p>
         <div class="message-text">{{ msg.content }}</div>
+        <!-- sources list so they still show after a reload (story 4) -->
+        {% if msg.sources %}
+          <div class="sources">
+            <p class="sources-title">Where this answer came from:</p>
+            <ol class="sources-list">
+              {% for source in msg.sources %}
+                <li value="{{ source.number }}">
+                  <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title }}{% if source.page %}, page {{ source.page }}{% endif %}</a>
+                </li>
+              {% endfor %}
+            </ol>
+          </div>
+        {% endif %}
       </div>
     {% endfor %}
+
   </div>
 
   <!-- Example questions: shown only when the chat is empty -->
