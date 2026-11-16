@@ -12,12 +12,18 @@ the database), so each visitor has their own chat without needing an account.
 import json
 import logging
 import re
+import tempfile
+from pathlib import Path
 
+from django.contrib import messages
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from . import rag
+from .forms import LocalSourceForm, UpdateSourceForm, UrlSourceForm
 from .llm import LLMError, chat_completion
 from .prompts import build_system_prompt
 
@@ -55,6 +61,87 @@ def index(request):
         "display": get_display(request),
         "text_sizes": TEXT_SIZES,
     })
+
+
+def manage_sources(request):
+    if request.method == "POST":
+        action = request.POST.get("action")
+        try:
+            if action == "add_local":
+                form = LocalSourceForm(request.POST, request.FILES)
+                if form.is_valid():
+                    upload = form.cleaned_data["file"]
+                    with tempfile.TemporaryDirectory() as temporary_directory:
+                        uploaded_path = Path(temporary_directory) / Path(upload.name).name
+                        with uploaded_path.open("wb") as destination:
+                            for chunk in upload.chunks():
+                                destination.write(chunk)
+                        call_command(
+                            "sources", "add", "--local", str(uploaded_path),
+                            "--title", form.cleaned_data["title"],
+                        )
+                    messages.success(request, "Source added. Ingest it to make it searchable.")
+                else:
+                    messages.error(request, _form_errors(form))
+            elif action == "add_url":
+                form = UrlSourceForm(request.POST)
+                if form.is_valid():
+                    call_command(
+                        "sources", "add", "--url", form.cleaned_data["url"],
+                        "--title", form.cleaned_data["title"],
+                    )
+                    messages.success(request, "URL source added. Ingest it to make it searchable.")
+                else:
+                    messages.error(request, _form_errors(form))
+            elif action == "update":
+                file_name = request.POST.get("file", "")
+                form = UpdateSourceForm(request.POST, request.FILES)
+                if form.is_valid():
+                    command_args = ["sources", "update", file_name]
+                    if form.cleaned_data["title"]:
+                        command_args.extend(["--title", form.cleaned_data["title"]])
+                    upload = form.cleaned_data["file"]
+                    if upload:
+                        with tempfile.TemporaryDirectory() as temporary_directory:
+                            uploaded_path = Path(temporary_directory) / Path(upload.name).name
+                            with uploaded_path.open("wb") as destination:
+                                for chunk in upload.chunks():
+                                    destination.write(chunk)
+                            command_args.extend(["--from-file", str(uploaded_path)])
+                            call_command(*command_args)
+                    else:
+                        call_command(*command_args)
+                    messages.success(request, "Source updated. Re-ingest it to refresh searchable content.")
+                else:
+                    messages.error(request, _form_errors(form))
+            elif action in {"ingest", "remove"}:
+                file_name = request.POST.get("file", "")
+                if action == "ingest":
+                    call_command("ingest", "--source", file_name)
+                    messages.success(request, f"{file_name} ingested and searchable.")
+                else:
+                    call_command("sources", "remove", file_name)
+                    messages.success(request, f"{file_name} removed from the catalog and search index.")
+            else:
+                messages.error(request, "Choose a valid source action.")
+        except CommandError as error:
+            messages.error(request, str(error))
+        except OSError as error:
+            messages.error(request, f"Could not read or save the source file: {error}")
+        return redirect("manage_sources")
+
+    try:
+        sources = rag.load_manifest()
+    except FileNotFoundError:
+        sources = []
+    except json.JSONDecodeError as error:
+        sources = []
+        messages.error(request, f"Could not read data/sources.json: {error}")
+    return render(request, "chat/manage_sources.html", {"sources": sources})
+
+
+def _form_errors(form):
+    return " ".join(error for errors in form.errors.values() for error in errors)
 
 
 @require_POST

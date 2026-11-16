@@ -205,6 +205,54 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .sources-list a:hover { color: var(--primary-hover); }
 .sources-list a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
+/* ---------- Source management (Stories 5 & 6) ---------- */
+.source-manager > h2 { margin: 0 0 8px; }
+.source-manager > p { margin: 0 0 18px; color: var(--muted); }
+.source-panel {
+  margin: 16px 0;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.source-panel h3 { margin: 0 0 12px; font-size: 1.2rem; }
+.source-form, .source-update-form { display: grid; gap: 8px; }
+.source-form input:not([type="file"]), .source-update-form input:not([type="file"]) {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.source-form input[type="file"], .source-update-form input[type="file"] {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.source-form label, .source-update-form label { font-weight: 700; }
+.source-form .btn, .source-update-form .btn { justify-self: start; margin-top: 6px; }
+.source-list { list-style: none; margin: 0; padding: 0; }
+.source-item { padding: 16px 0; border-top: 1px solid var(--border); }
+.source-details { display: grid; gap: 4px; overflow-wrap: anywhere; }
+.source-details span, .source-details a { font-size: 1rem; }
+.source-details a { color: var(--primary); }
+.source-update-form { margin-top: 14px; }
+.source-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.source-actions form { margin: 0; }
+.source-message { padding: 10px 14px; border-radius: 8px; overflow-wrap: anywhere; }
+.source-message-success { background: var(--bot-bubble); border-left: 4px solid var(--primary); }
+.source-message-error { background: var(--error-bg); color: var(--error-text); border-left: 4px solid var(--error-text); }
+.high-contrast .source-message-success { border: 2px solid var(--primary); }
+.high-contrast .source-message-error { border: 2px solid var(--error-text); }
 
 /* "Thinking…" dots */
 .typing::after {
@@ -260,4 +308,6 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
   .message { max-width: 95%; }
   .ask-form { flex-direction: column; }
   .btn-primary { width: 100%; }
+  .source-actions { flex-direction: column; }
+  .source-actions form, .source-actions .btn { width: 100%; }
 }
