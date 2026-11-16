@@ -1,0 +1,11 @@
+Medicare Helper Testing Guide
+
+This document is used to test the Medicare Helper chatbot's retrieval augmented generation system.
+
+The special Medicare Helper test code is BLUE123. This code is used only for testing the chatbot's ability to retrieve information from newly added documents.
+
+The purpose of this document is to verify that developers can add new sources to the knowledge base, process the text, generate embeddings, and store those embeddings in ChromaDB.
+
+When a user asks what the special Medicare Helper test code is, the correct answer is BLUE123.
+
+This document also helps verify that the chatbot can identify the source of its information and display an appropriate citation.

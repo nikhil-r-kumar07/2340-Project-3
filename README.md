@@ -39,9 +39,35 @@ We only use Chroma's embedded `PersistentClient`, so `requirements.txt` lists ju
 
 ## The dataset
 - `data/sources.json` lists each document's file, title, and official URL. The PDFs are in `data/docs/`.
-- To add a document, add it to `sources.json` and run `python manage.py ingest`. Missing PDFs are downloaded from their URL.
+- Add/remove/update sources with `python manage.py sources add`, `python manage.py sources remove`, and `python manage.py sources update`. These commands keep `data/sources.json` in sync; local files are copied into `data/docs/`.
+- Local `.pdf` and UTF-8 `.txt` files are supported. Add a public `--url` source to fetch its text (or PDF) during ingestion. HTML pages are reduced to visible text.
+- Run `python manage.py ingest` to refresh every source, or `python manage.py ingest --source FILE` to ingest one. URL sources are fetched again each time; existing URL-based sources are downloaded when their local file is missing.
 - `python manage.py ingest --reset` rebuilds the store from scratch.
 - Current documents (all from medicare.gov/publications): Medicare & You, Your Medicare Benefits, Medicare Costs, Understanding Medicare Advantage Plans, Your Guide to Medicare Prescription Drug Coverage, Choosing a Medigap Policy.
+
+### Source management examples
+```bash
+# Make a local copy of a project PDF, then add and index it
+cp data/docs/10116-your-medicare-benefits.pdf /tmp/local-medicare.pdf
+python manage.py sources add --local /tmp/local-medicare.pdf --title "Local Medicare benefits"
+python manage.py ingest --source local-medicare.pdf
+
+# Fetch a public page, extract its visible text, and index it
+python manage.py sources add --url https://www.medicare.gov/basics/get-started-with-medicare --title "Getting started with Medicare"
+python manage.py ingest --source get-started-with-medicare.txt
+
+# Update source metadata, or replace its local file and re-index
+python manage.py sources update local-medicare.pdf --title "Updated Medicare benefits"
+python manage.py ingest --source local-medicare.pdf
+cp data/docs/10116-your-medicare-benefits.pdf /tmp/replacement-medicare.pdf
+python manage.py sources update local-medicare.pdf --from-file /tmp/replacement-medicare.pdf --title "Replacement Medicare benefits"
+python manage.py ingest --source replacement-medicare.pdf
+
+# List or remove a source (removal also deletes its ChromaDB passages)
+python manage.py sources list
+python manage.py sources remove replacement-medicare.pdf
+python manage.py sources remove get-started-with-medicare.txt
+```
 
 
 ## Switching models
