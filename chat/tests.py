@@ -192,3 +192,55 @@ class RagHelperTests(TestCase):
         prompt = build_system_prompt(passages)
         self.assertIn("[1] (from \"Medicare & You\", page 5)\nAlpha text.", prompt)
         self.assertIn("[2] (from \"Medicare & You\", page 9)\nBeta text.", prompt)
+
+
+# Story 8: larger text and high-contrast display settings
+class DisplaySettingsTests(TestCase):
+    def save_display(self, setting):
+        return self.client.post(
+            reverse("display"),
+            data=json.dumps(setting),
+            content_type="application/json",
+        )
+
+    def test_page_starts_with_normal_text_and_contrast(self):
+        response = self.client.get(reverse("index"))
+        self.assertContains(response, 'class="text-normal"')
+        self.assertContains(response, "High contrast")
+
+    def test_text_size_is_saved_and_shown_after_reload(self):
+        response = self.save_display({"text_size": "larger"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["text_size"], "larger")
+
+        page = self.client.get(reverse("index"))
+        self.assertContains(page, 'class="text-larger"')
+
+    def test_high_contrast_is_saved_and_shown_after_reload(self):
+        self.save_display({"high_contrast": True})
+        page = self.client.get(reverse("index"))
+        self.assertContains(page, 'class="text-normal high-contrast"')
+        self.assertRegex(page.content.decode(), r'id="contrast-toggle"[^>]*aria-pressed="true"')
+
+    def test_changing_one_setting_keeps_the_other(self):
+        self.save_display({"text_size": "large"})
+        response = self.save_display({"high_contrast": True})
+        self.assertEqual(response.json(), {"text_size": "large", "high_contrast": True})
+
+    def test_unknown_text_size_rejected(self):
+        response = self.save_display({"text_size": "huge"})
+        self.assertEqual(response.status_code, 400)
+        self.assertNotIn("display", self.client.session)
+
+    @patch("chat.views.rag.search_conversation", return_value=[])
+    @patch("chat.views.chat_completion", return_value="Answer")
+    def test_new_chat_keeps_display_settings(self, mock_llm, mock_search):
+        self.save_display({"text_size": "large", "high_contrast": True})
+        self.client.post(
+            reverse("ask"),
+            data=json.dumps({"question": "What is Medicare?"}),
+            content_type="application/json",
+        )
+        self.client.post(reverse("reset"))
+        page = self.client.get(reverse("index"))
+        self.assertContains(page, 'class="text-large high-contrast"')

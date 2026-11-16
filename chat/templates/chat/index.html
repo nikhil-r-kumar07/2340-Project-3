@@ -6,6 +6,19 @@
 {% endblock %}
 
 {% block content %}
+<!-- Display settings (Story 8): bigger text and a high-contrast mode. Saved for this visitor. -->
+<section class="display-bar" aria-label="Display settings">
+  <div class="setting" role="group" aria-labelledby="text-size-label">
+    <span id="text-size-label" class="setting-label">Text size:</span>
+    {% for value, label in text_sizes %}
+      <button type="button" class="btn btn-toggle size-option size-{{ value }}" data-size="{{ value }}"
+              aria-pressed="{% if display.text_size == value %}true{% else %}false{% endif %}">{{ label }}</button>
+    {% endfor %}
+  </div>
+  <button type="button" id="contrast-toggle" class="btn btn-toggle"
+          aria-pressed="{% if display.high_contrast %}true{% else %}false{% endif %}">High contrast</button>
+</section>
+
 <section class="chat-card" aria-label="Chat with Medicare Helper">
 
   <!-- Messages appear here. aria-live makes screen readers announce new answers. -->

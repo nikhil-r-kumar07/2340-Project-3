@@ -5,6 +5,7 @@
  */
 :root {
   --font: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --text-scale: 100%;            /* grows everything sized in rem (Story 8) */
   --text-size: 1.2rem;           /* ~19px base text: easier for older eyes */
 
   --bg: #f4f7fb;
@@ -27,6 +28,36 @@
   --radius: 14px;
   --shadow: 0 4px 18px rgba(20, 40, 80, 0.08);
 }
+
+/* ---------- Display settings (Story 8) ----------
+ * The server puts these classes on <html>. They only change variables,
+ * so every part of the page follows along. */
+:root.text-large  { --text-scale: 125%; }
+:root.text-larger { --text-scale: 150%; }
+
+/* High contrast: pure black and white with bright yellow, well past WCAG AAA (7:1) */
+:root.high-contrast {
+  --bg: #000000;
+  --surface: #000000;
+  --text: #ffffff;
+  --muted: #ffffff;
+  --border: #ffffff;
+
+  --primary: #ffd60a;
+  --primary-hover: #ffffff;
+  --primary-text: #000000;
+  --user-bubble: #ffd60a;
+  --user-text: #000000;
+  --bot-bubble: #000000;
+  --bot-text: #ffffff;
+  --focus: #00e5ff;
+  --error-bg: #000000;
+  --error-text: #ff9e9e;
+
+  --shadow: none;
+}
+
+html { font-size: var(--text-scale); }
 
 * { box-sizing: border-box; }
 
@@ -66,6 +97,7 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .site-header { background: var(--surface); border-bottom: 1px solid var(--border); }
 .header-inner {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap;                /* the "New chat" button drops down with very large text */
   gap: 16px; padding-top: 16px; padding-bottom: 16px;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
@@ -90,6 +122,23 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .btn-primary:disabled { opacity: 0.6; cursor: wait; }
 .btn-secondary { background: var(--surface); color: var(--primary); border-color: var(--primary); }
 .btn-secondary:hover { background: var(--bot-bubble); }
+
+/* On/off buttons: filled in when turned on, so the current choice is easy to see */
+.btn-toggle { background: var(--surface); color: var(--primary); border-color: var(--primary); }
+.btn-toggle:hover { background: var(--bot-bubble); }
+.btn-toggle[aria-pressed="true"] { background: var(--primary); color: var(--primary-text); }
+
+/* ---------- Display settings bar (Story 8) ---------- */
+.display-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 16px;
+}
+.setting { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.setting-label { font-weight: 700; }
+.display-bar .btn { min-height: 48px; padding: 0 16px; }
+/* Each size button is shown a little bigger than the last, as a preview */
+.size-large  { font-size: 1.1em; }
+.size-larger { font-size: 1.25em; }
 
 /* ---------- Chat card ---------- */
 .chat-card {
@@ -122,6 +171,10 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .message-user .message-text { background: var(--user-bubble); color: var(--user-text); border-bottom-right-radius: 4px; }
 .message-bot .message-text { background: var(--bot-bubble); color: var(--bot-text); border-bottom-left-radius: 4px; }
 .message-error .message-text { background: var(--error-bg); color: var(--error-text); }
+
+/* In high contrast the bubbles are black on black, so give them a clear outline instead */
+.high-contrast .message-text { border: 2px solid var(--border); }
+.high-contrast .message-error .message-text { border-color: var(--error-text); }
 
 
 /* sources box under answers (story 4) */
@@ -177,6 +230,7 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
   color: var(--text); background: var(--surface);
 }
 .ask-form textarea:focus { border-color: var(--primary); }
+.ask-form textarea::placeholder { color: var(--muted); }
 .hint { margin: 8px 0 0; font-size: 0.95rem; color: var(--muted); }
 
 /* ---------- Footer ---------- */

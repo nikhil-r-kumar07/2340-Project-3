@@ -4,6 +4,7 @@ Web pages and API endpoints for the chatbot.
 - index: shows the chat page (Story 1)
 - ask:   receives a question, asks the model, returns the answer (Story 2)
 - reset: clears the conversation for the "New chat" button (Story 2)
+- display: saves the text size and high-contrast choices (Story 8)
 
 The conversation is stored in the user's session (a cookie-linked record in
 the database), so each visitor has their own chat without needing an account.
@@ -32,12 +33,27 @@ EXAMPLE_QUESTIONS = [
     "What is the difference between Medicare and Medicaid?",
 ]
 
+# Text size choices for the display settings bar (Story 8): (value, button label)
+TEXT_SIZES = [
+    ("normal", "Normal"),
+    ("large", "Large"),
+    ("larger", "Extra large"),
+]
+DEFAULT_DISPLAY = {"text_size": "normal", "high_contrast": False}
+
+
+def get_display(request):
+    """The visitor's saved display settings, with defaults filled in."""
+    return {**DEFAULT_DISPLAY, **request.session.get("display", {})}
+
 
 def index(request):
     history = request.session.get("history", [])
     return render(request, "chat/index.html", {
         "history": history,
         "examples": EXAMPLE_QUESTIONS,
+        "display": get_display(request),
+        "text_sizes": TEXT_SIZES,
     })
 
 
@@ -109,3 +125,24 @@ def normalize_citations(answer):
 def reset(request):
     request.session["history"] = []
     return JsonResponse({"ok": True})
+
+
+@require_POST
+def display(request):
+    # Only the settings that were sent are changed, so each button can save on its own.
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid request."}, status=400)
+
+    current = get_display(request)
+    if "text_size" in data:
+        if data["text_size"] not in [value for value, _ in TEXT_SIZES]:
+            return JsonResponse({"error": "Unknown text size."}, status=400)
+        current["text_size"] = data["text_size"]
+    if "high_contrast" in data:
+        current["high_contrast"] = bool(data["high_contrast"])
+
+    # Kept in the session (like the chat history), so it stays after a reload or "New chat".
+    request.session["display"] = current
+    return JsonResponse(current)
