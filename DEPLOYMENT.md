@@ -32,10 +32,11 @@ chmod 600 .env
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-Edit `.env` and replace both `CHANGE_ME` values:
+Edit `.env` and replace every `CHANGE_ME` value:
 
 - `SECRET_KEY`: use the generated random value.
 - `LLM_API_KEY`: use the provider key.
+- `HF_TOKEN`: use a read-only Hugging Face access token.
 
 Do not commit `.env`. Keep `DEBUG=False`. The supplied hostname, trusted origin,
 HTTPS settings, and persistent paths are already configured for
@@ -70,14 +71,19 @@ exit()
 Build the initial RAG index:
 
 ```bash
-python manage.py ingest
+python manage.py ingest --reset
 ```
 
-The first run downloads the embedding model and can take several minutes.
+Production uses Hugging Face's hosted embedding API, so it does not download the
+67 MB local model. Rebuild the whole index whenever `EMBED_PROVIDER` or
+`EMBED_MODEL` changes; vectors from different models must not be mixed.
 PythonAnywhere free accounts restrict outbound requests to allowlisted sites. If
 a source cannot be downloaded, upload its PDF/TXT file through the developer UI
 or place it in `data/docs/`, then ingest it again. Run large initial ingests from
 a Bash console so a web-request timeout cannot interrupt them.
+
+For local, offline embeddings instead, install
+`requirements-local-embeddings.txt` and set `EMBED_PROVIDER=local`.
 
 ## 4. Configure the PythonAnywhere web app
 

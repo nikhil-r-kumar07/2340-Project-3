@@ -185,3 +185,31 @@ class SourceCommandTests(SimpleTestCase):
 
         self.assertEqual(count, 1)
         self.assertEqual(collection.documents, [repeated_chunk])
+
+
+class HostedEmbeddingTests(SimpleTestCase):
+    def test_hugging_face_embeddings_are_normalized(self):
+        response = SimpleNamespace(
+            raise_for_status=lambda: None,
+            json=lambda: [[3.0, 4.0], [0.0, 2.0]],
+        )
+        with patch("chat.rag.requests.post", return_value=response) as post:
+            vectors = list(
+                rag.HuggingFaceEmbedding(
+                    "sentence-transformers/all-MiniLM-L6-v2",
+                    "test-token",
+                ).embed(["first", "second"])
+            )
+
+        self.assertAlmostEqual(vectors[0][0], 0.6)
+        self.assertAlmostEqual(vectors[0][1], 0.8)
+        self.assertEqual(vectors[1], [0.0, 1.0])
+        self.assertEqual(
+            post.call_args.kwargs["headers"]["Authorization"],
+            "Bearer test-token",
+        )
+        self.assertEqual(post.call_args.kwargs["json"]["inputs"], ["first", "second"])
+
+    def test_hugging_face_token_is_required(self):
+        with self.assertRaisesMessage(ValueError, "HF_TOKEN is required"):
+            rag.HuggingFaceEmbedding("sentence-transformers/all-MiniLM-L6-v2", "")

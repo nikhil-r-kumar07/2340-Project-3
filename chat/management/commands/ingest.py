@@ -75,8 +75,12 @@ class Command(BaseCommand):
         docs_dir = settings.DATA_DIR / "docs"
         docs_dir.mkdir(parents=True, exist_ok=True)
 
-        #load the model up front so the download message shows before anything else
-        self.stdout.write("Loading the embedding model (downloads ~67 MB the first time)...")
+        if settings.EMBED_PROVIDER == "huggingface":
+            self.stdout.write(
+                f"Using Hugging Face hosted embeddings ({settings.EMBED_MODEL})..."
+            )
+        else:
+            self.stdout.write("Loading the embedding model (downloads ~67 MB the first time)...")
         rag.get_embedder()
 
         sources = rag.load_manifest()

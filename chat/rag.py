@@ -1,22 +1,21 @@
 # rag stuff for stories 3 + 4 - the only file that touches chromadb and the embedding model
 # ingestion: manage.py ingest reads the pdfs in data/sources.json, chunks them, embeds them, saves to chromadb
 # retrieval: search() embeds the question and returns the closest passages with title, link and page
-# uses fastembed (onnx) instead of pytorch so it fits on pythonanywhere
+# supports hosted Hugging Face embeddings in production and FastEmbed locally
 
 import hashlib
 import json
+import math
 import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 
+import requests
 from django.conf import settings
 
 COLLECTION_NAME = "medicare"
-
-#for better retrieval for bge models for question not passages
-QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
 # BGE supports 512 tokens. A 384-token chunk leaves room for tokenizer special
 # tokens while providing substantially more coherent context than character cuts.
@@ -68,8 +67,77 @@ class Passage:
 
 #shared resources
 
+class HuggingFaceEmbedding:
+    """Small FastEmbed-compatible adapter for Hugging Face's hosted API."""
+
+    def __init__(self, model, token, timeout=60):
+        if not token:
+            raise ValueError("HF_TOKEN is required when EMBED_PROVIDER=huggingface.")
+        self.model = model
+        self.token = token
+        self.timeout = timeout
+        self.url = (
+            "https://router.huggingface.co/hf-inference/models/"
+            f"{model}/pipeline/feature-extraction"
+        )
+
+    def token_count(self, text):
+        # A conservative approximation used only for chunk boundaries. The API
+        # performs the authoritative model tokenization.
+        words_and_punctuation = len(re.findall(r"\w+|[^\w\s]", text))
+        character_estimate = math.ceil(len(text) / 4)
+        return max(1, words_and_punctuation, character_estimate)
+
+    def embed(self, texts):
+        texts = list(texts)
+        try:
+            response = requests.post(
+                self.url,
+                headers={"Authorization": f"Bearer {self.token}"},
+                json={"inputs": texts, "options": {"wait_for_model": True}},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except (requests.RequestException, ValueError) as error:
+            raise ValueError(f"Hugging Face embedding request failed: {error}") from error
+
+        if isinstance(payload, dict):
+            if payload.get("error"):
+                raise ValueError(f"Hugging Face embedding request failed: {payload['error']}")
+            raise ValueError("Hugging Face returned an unexpected embedding response.")
+        if len(texts) == 1 and payload and isinstance(payload[0], (int, float)):
+            payload = [payload]
+        if not isinstance(payload, list) or len(payload) != len(texts):
+            raise ValueError("Hugging Face returned an unexpected embedding response.")
+        return [self._pool_and_normalize(vector) for vector in payload]
+
+    @staticmethod
+    def _pool_and_normalize(vector):
+        # Some feature-extraction models return token vectors rather than one
+        # sentence vector. Mean-pool them so Chroma always receives one vector.
+        if vector and isinstance(vector[0], list):
+            width = len(vector[0])
+            vector = [
+                sum(token[index] for token in vector) / len(vector)
+                for index in range(width)
+            ]
+        try:
+            vector = [float(value) for value in vector]
+        except (TypeError, ValueError) as error:
+            raise ValueError("Hugging Face returned an invalid embedding vector.") from error
+        magnitude = math.sqrt(sum(value * value for value in vector))
+        return [value / magnitude for value in vector] if magnitude else vector
+
+
 @lru_cache(maxsize=1)
 def get_embedder():
+    if settings.EMBED_PROVIDER == "huggingface":
+        return HuggingFaceEmbedding(
+            settings.EMBED_MODEL,
+            settings.HF_TOKEN,
+            settings.EMBED_API_TIMEOUT,
+        )
     from fastembed import TextEmbedding
     return TextEmbedding(model_name=settings.EMBED_MODEL, cache_dir=str(settings.EMBED_CACHE_DIR))
 
@@ -86,10 +154,14 @@ def get_collection():
     )
 
 def embed_passages(texts):
-    return [vector.tolist() for vector in get_embedder().embed(texts)]
+    return [
+        vector.tolist() if hasattr(vector, "tolist") else list(vector)
+        for vector in get_embedder().embed(texts)
+    ]
 
 def embed_query(text):
-    return next(iter(get_embedder().embed([QUERY_PREFIX + text]))).tolist()
+    vector = next(iter(get_embedder().embed([settings.EMBED_QUERY_PREFIX + text])))
+    return vector.tolist() if hasattr(vector, "tolist") else list(vector)
 
 # ingestion
 def preprocessing_options(source):
@@ -195,8 +267,8 @@ def preprocess(pages, options=None):
 # limit. The optional counter keeps unit tests fast and independent of model files.
 def split_into_chunks(
     text,
-    size=CHUNK_SIZE,
-    overlap=CHUNK_OVERLAP,
+    size=None,
+    overlap=None,
     token_counter=None,
     minimum_length=MIN_CHUNK_LENGTH,
 ):
@@ -206,6 +278,8 @@ def split_into_chunks(
     if len(text) < minimum_length:
         return []
 
+    size = size or settings.EMBED_CHUNK_SIZE
+    overlap = settings.EMBED_CHUNK_OVERLAP if overlap is None else overlap
     token_counter = token_counter or get_embedder().token_count
     chunks = semchunk.chunk(
         text,

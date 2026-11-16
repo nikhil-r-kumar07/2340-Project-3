@@ -17,7 +17,7 @@ CS 2340 Project 3.
 - **Plain HTML/CSS/JavaScript:** no build step.
 - **LLM:** OpenAI's open-weights `gpt-oss-120b`, hosted free on [Groq](https://console.groq.com).
   - It's called through the standard OpenAI-compatible chat API using `requests` (`chat/llm.py`).
-- **RAG:** ChromaDB vector store + `BAAI/bge-small-en-v1.5` embeddings run through fastembed (ONNX, so no PyTorch), `semchunk` for token-aware semantic chunking, and `pypdf` for reading PDFs.
+- **RAG:** ChromaDB vector store + configurable hosted Hugging Face or local FastEmbed embeddings, `semchunk` for token-aware semantic chunking, and `pypdf` for reading PDFs.
 
 ## Setup
 ```bash

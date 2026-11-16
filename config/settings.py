@@ -112,6 +112,32 @@ LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "")
 DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data")).expanduser()
 CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "chroma_db")).expanduser()
 EMBED_CACHE_DIR = Path(os.getenv("EMBED_CACHE_DIR", BASE_DIR / ".model_cache")).expanduser()
-EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "local").strip().lower()
+EMBED_MODEL = os.getenv(
+    "EMBED_MODEL",
+    (
+        "sentence-transformers/all-MiniLM-L6-v2"
+        if EMBED_PROVIDER == "huggingface"
+        else "BAAI/bge-small-en-v1.5"
+    ),
+)
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+EMBED_API_TIMEOUT = int(os.getenv("EMBED_API_TIMEOUT", "60"))
+EMBED_CHUNK_SIZE = int(os.getenv(
+    "EMBED_CHUNK_SIZE",
+    "240" if EMBED_PROVIDER == "huggingface" else "384",
+))
+EMBED_CHUNK_OVERLAP = int(os.getenv(
+    "EMBED_CHUNK_OVERLAP",
+    "40" if EMBED_PROVIDER == "huggingface" else "64",
+))
+EMBED_QUERY_PREFIX = os.getenv(
+    "EMBED_QUERY_PREFIX",
+    (
+        "Represent this sentence for searching relevant passages: "
+        if "bge-" in EMBED_MODEL.lower()
+        else ""
+    ),
+)
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4"))  # passages given to the model per question
 RAG_MAX_DISTANCE = float(os.getenv("RAG_MAX_DISTANCE", "0.45"))  # ignore passages beyond this

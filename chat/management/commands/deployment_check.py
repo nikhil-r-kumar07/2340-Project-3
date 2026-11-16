@@ -43,8 +43,20 @@ class Command(BaseCommand):
             failures.append("DEBUG must be False.")
         if settings.LLM_API_KEY.strip() in PLACEHOLDERS:
             failures.append("LLM_API_KEY is missing or still contains a placeholder.")
+        if settings.EMBED_PROVIDER not in {"local", "huggingface"}:
+            failures.append("EMBED_PROVIDER must be either 'local' or 'huggingface'.")
+        if (
+            settings.EMBED_PROVIDER == "huggingface"
+            and settings.HF_TOKEN.strip() in PLACEHOLDERS
+        ):
+            failures.append(
+                "HF_TOKEN is required when EMBED_PROVIDER=huggingface."
+            )
 
-        for package in ("chromadb", "fastembed", "pypdf", "requests", "semchunk"):
+        packages = ["chromadb", "pypdf", "requests", "semchunk"]
+        if settings.EMBED_PROVIDER == "local":
+            packages.append("fastembed")
+        for package in packages:
             if importlib.util.find_spec(package) is None:
                 failures.append(f"Required Python package is missing: {package}.")
 
@@ -52,8 +64,9 @@ class Command(BaseCommand):
             "database": Path(settings.DATABASES["default"]["NAME"]).parent,
             "source data": settings.DATA_DIR,
             "ChromaDB": settings.CHROMA_DIR,
-            "embedding cache": settings.EMBED_CACHE_DIR,
         }
+        if settings.EMBED_PROVIDER == "local":
+            persistent_paths["embedding cache"] = settings.EMBED_CACHE_DIR
         for label, path in persistent_paths.items():
             existing_parent = nearest_existing_parent(path)
             if not os.access(existing_parent, os.W_OK):

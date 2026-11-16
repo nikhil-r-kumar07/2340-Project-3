@@ -3,7 +3,6 @@ requests>=2.31
 python-dotenv>=1.0
 
 # RAG (Stories 3 + 4)
-fastembed>=0.9,<1.0      # bge-small-en-v1.5 via ONNX, so no PyTorch
 pypdf>=5.0               # reads the Medicare PDFs during ingestion
 semchunk>=4.1,<5.0       # token-aware semantic chunking for RAG passages
 
