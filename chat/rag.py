@@ -98,18 +98,37 @@ def read_pdf_pages(path):
         yield number, clean_text(page.extract_text() or "")
 
 
+def read_source_pages(path):
+    path = settings.DATA_DIR / "docs" / path if isinstance(path, str) else path
+    with open(path, "rb") as source_file:
+        is_pdf = source_file.read(5).startswith(b"%PDF")
+
+    if is_pdf:
+        yield from read_pdf_pages(path)
+    else:
+        # Plain text and fetched web pages have no page structure, so cite them with page 0.
+        yield 0, clean_text(path.read_text(encoding="utf-8-sig", errors="replace"))
+
+
 def load_manifest():
     with open(settings.DATA_DIR / "sources.json", encoding="utf-8") as f:
         return json.load(f)
+
+
+def save_manifest(sources):
+    manifest_path = settings.DATA_DIR / "sources.json"
+    temporary_path = manifest_path.with_suffix(".json.tmp")
+    temporary_path.write_text(json.dumps(sources, indent=2) + "\n", encoding="utf-8")
+    temporary_path.replace(manifest_path)
+
 
 # add/replace one document from sources.json in the vector store
 def ingest_source(source, log=print):
     path = settings.DATA_DIR / "docs" / source["file"]
     collection = get_collection()
-    collection.delete(where={"file": source["file"]})  # re-ingesting replaces old passages
 
     ids, documents, metadatas = [], [], []
-    for page, text in read_pdf_pages(path):
+    for page, text in read_source_pages(path):
         for index, chunk in enumerate(split_into_chunks(text)):
             ids.append(hashlib.sha1(f"{source['file']}|{page}|{index}".encode()).hexdigest())
             documents.append(chunk)
@@ -120,16 +139,29 @@ def ingest_source(source, log=print):
                 "page": page,
             })
 
+    if not documents:
+        raise ValueError(f"No searchable text found in {path.name}.")
+
     batch = 64
+    # Generate every embedding before deleting the old index, preserving it if embedding fails.
+    embeddings = [
+        embed_passages(documents[i:i + batch])
+        for i in range(0, len(documents), batch)
+    ]
+    collection.delete(where={"file": source["file"]})
     for i in range(0, len(documents), batch):
         collection.add(
             ids=ids[i:i + batch],
             documents=documents[i:i + batch],
-            embeddings=embed_passages(documents[i:i + batch]),
+            embeddings=embeddings[i // batch],
             metadatas=metadatas[i:i + batch],
         )
     log(f"  {source['title']}: {len(documents)} passages")
     return len(documents)
+
+
+def remove_source(file_name):
+    get_collection().delete(where={"file": file_name})
 
 
 def reset_store():

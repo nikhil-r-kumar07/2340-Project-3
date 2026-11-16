@@ -1,32 +1,44 @@
 [
-    {
-        "file": "10050-medicare-and-you.pdf",
-        "title": "Medicare & You (official handbook)",
-        "url": "https://www.medicare.gov/publications/10050-medicare-and-you.pdf"
-    },
-    {
-        "file": "10116-your-medicare-benefits.pdf",
-        "title": "Your Medicare Benefits",
-        "url": "https://www.medicare.gov/publications/10116-your-medicare-benefits.pdf"
-    },
-    {
-        "file": "11579-medicare-costs.pdf",
-        "title": "Medicare Costs",
-        "url": "https://www.medicare.gov/publications/11579-medicare-costs.pdf"
-    },
-    {
-        "file": "12026-understanding-medicare-advantage-plans.pdf",
-        "title": "Understanding Medicare Advantage Plans",
-        "url": "https://www.medicare.gov/publications/12026-understanding-medicare-advantage-plans.pdf"
-    },
-    {
-        "file": "11109-your-guide-to-medicare-prescription-drug-coverage.pdf",
-        "title": "Your Guide to Medicare Prescription Drug Coverage",
-        "url": "https://www.medicare.gov/publications/11109-your-guide-to-medicare-prescription-drug-coverage.pdf"
-    },
-    {
-        "file": "02110-choosing-a-medigap-policy.pdf",
-        "title": "Choosing a Medigap Policy",
-        "url": "https://www.medicare.gov/publications/02110-choosing-a-medigap-policy.pdf"
-    }      
+  {
+    "file": "10050-medicare-and-you.pdf",
+    "title": "Medicare & You (official handbook)",
+    "url": "https://www.medicare.gov/publications/10050-medicare-and-you.pdf"
+  },
+  {
+    "file": "10116-your-medicare-benefits.pdf",
+    "title": "Your Medicare Benefits",
+    "url": "https://www.medicare.gov/publications/10116-your-medicare-benefits.pdf"
+  },
+  {
+    "file": "11579-medicare-costs.pdf",
+    "title": "Medicare Costs",
+    "url": "https://www.medicare.gov/publications/11579-medicare-costs.pdf"
+  },
+  {
+    "file": "12026-understanding-medicare-advantage-plans.pdf",
+    "title": "Understanding Medicare Advantage Plans",
+    "url": "https://www.medicare.gov/publications/12026-understanding-medicare-advantage-plans.pdf"
+  },
+  {
+    "file": "11109-your-guide-to-medicare-prescription-drug-coverage.pdf",
+    "title": "Your Guide to Medicare Prescription Drug Coverage",
+    "url": "https://www.medicare.gov/publications/11109-your-guide-to-medicare-prescription-drug-coverage.pdf"
+  },
+  {
+    "file": "02110-choosing-a-medigap-policy.pdf",
+    "title": "Choosing a Medigap Policy",
+    "url": "https://www.medicare.gov/publications/02110-choosing-a-medigap-policy.pdf"
+  },
+  {
+    "file": "test_guide.txt",
+    "title": "Test Medicare Guide",
+    "url": "",
+    "source_type": "local"
+  },
+  {
+    "file": "get-started-with-medicare.txt",
+    "title": "Getting started with Medicare",
+    "url": "https://www.medicare.gov/basics/get-started-with-medicare",
+    "source_type": "url"
+  }
 ]
