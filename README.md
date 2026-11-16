@@ -8,6 +8,7 @@ CS 2340 Project 3.
 - **Story 2:** ask natural-language Medicare questions and get relevant answers.
 - **Story 3:** answers are grounded in official Medicare.gov documents.
 - **Story 4:** each answer lists the documents and pages it came from, with links to them.
+- **Story 8:** bigger text (Normal / Large / Extra large) and a high-contrast mode, saved for each visitor.
 
 
 ## Tech stack
@@ -96,6 +97,13 @@ The tests use a fake model, so they need no internet connection or API key. They
 6. The view keeps only the sources the answer cites, saves the conversation, and returns `{answer, sources}`.
    - The page shows each source as a link to the PDF page.
 
+## Display settings (Story 8)
+- The bar above the chat has **Text size** (Normal / Large / Extra large) and **High contrast** buttons.
+- Clicking one changes the page right away (`chat.js` swaps a class on `<html>`) and saves it with `POST /api/display/`.
+- The choice is kept in the session, like the chat history, so it stays after a reload or "New chat".
+- `base.html` adds the saved classes on the server, so the page never flashes the default look first.
+- In `style.css` the modes only override variables: `--text-scale` grows everything sized in `rem`, and `.high-contrast` swaps the colors to black, white and yellow.
+
 ## Project layout
 | File | What it does | Story |
 |---|---|---|
@@ -103,18 +111,17 @@ The tests use a fake model, so they need no internet connection or API key. They
 | `config/urls.py`, `chat/urls.py` | URL routes | 1 |
 | `templates/base.html` | Page shell: header, footer, disclaimer | 1 |
 | `chat/templates/chat/index.html` | Chat page | 1 |
-| `chat/static/chat/style.css` | Styles: large text, high legibility, mobile-friendly | 1 |
-| `chat/static/chat/chat.js` | Sends questions and shows answers without reloading | 1 |
-| `chat/views.py` | `index`, `ask` and `reset` endpoints | 2 |
+| `chat/static/chat/style.css` | Styles: large text, high legibility, mobile-friendly, text-size and high-contrast modes | 1, 8 |
+| `chat/static/chat/chat.js` | Sends questions and shows answers without reloading; display settings buttons | 1, 8 |
+| `chat/views.py` | `index`, `ask`, `reset` and `display` endpoints | 2, 8 |
 | `chat/llm.py` | The only code that talks to the LLM | 2 |
 | `chat/prompts.py` | System prompt: plain language, Medicare-only, safe | 2 |
-| `chat/tests.py` | Automated tests | 2-4 |
+| `chat/tests.py` | Automated tests | 2-4, 8 |
 | `chat/rag.py` | Embeddings, ChromaDB, chunking, search | 3 |
 | `chat/management/commands/ingest.py` | `manage.py ingest`: loads `data/` into ChromaDB | 3 |
 | `data/sources.json`, `data/docs/` | The curated Medicare.gov dataset | 3 |
 
 ## Coming next
 - Admin controls.
-- Text-size and high-contrast modes.
 - Read-aloud.
 - Deployment to PythonAnywhere.

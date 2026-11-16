@@ -1,6 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<!-- Display settings (Story 8) are applied here on the server, so the page never flashes the default look first. -->
+<html lang="en" class="text-{{ display.text_size|default:'normal' }}{% if display.high_contrast %} high-contrast{% endif %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

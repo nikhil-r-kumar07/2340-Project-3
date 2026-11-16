@@ -123,4 +123,35 @@ newChatButton.addEventListener("click", async () => {
   }
 });
 
+// ---------- Display settings (Story 8) ----------
+// The change shows right away by swapping classes on <html>; style.css does the rest.
+// It is also saved to the server so it stays after a reload.
+const page = document.documentElement;
+const sizeButtons = document.querySelectorAll(".size-option");
+const contrastButton = document.getElementById("contrast-toggle");
+
+function saveDisplay(setting) {
+  // Saving is a nice-to-have: if it fails, the page still looks right until reload.
+  postJSON("/api/display/", setting).catch(() => {});
+}
+
+sizeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const size = button.dataset.size;
+    sizeButtons.forEach((b) => {
+      page.classList.remove(`text-${b.dataset.size}`);
+      b.setAttribute("aria-pressed", String(b === button));
+    });
+    page.classList.add(`text-${size}`);
+    saveDisplay({ text_size: size });
+  });
+});
+
+contrastButton.addEventListener("click", () => {
+  const turnOn = contrastButton.getAttribute("aria-pressed") !== "true";
+  page.classList.toggle("high-contrast", turnOn);
+  contrastButton.setAttribute("aria-pressed", String(turnOn));
+  saveDisplay({ high_contrast: turnOn });
+});
+
 messages.scrollTop = messages.scrollHeight;
