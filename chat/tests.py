@@ -244,3 +244,23 @@ class DisplaySettingsTests(TestCase):
         self.client.post(reverse("reset"))
         page = self.client.get(reverse("index"))
         self.assertContains(page, 'class="text-large high-contrast"')
+
+
+# Story 9: a button that reads the chatbot's answers aloud
+class ReadAloudTests(TestCase):
+    def test_greeting_has_read_aloud_button(self):
+        response = self.client.get(reverse("index"))
+        self.assertContains(response, 'class="btn btn-secondary read-aloud" hidden', count=1)
+        self.assertContains(response, "Read aloud")
+
+    @patch("chat.views.rag.search_conversation", return_value=[])
+    @patch("chat.views.chat_completion", return_value="Part B covers doctor visits.")
+    def test_saved_answers_get_a_button_but_questions_do_not(self, mock_llm, mock_search):
+        self.client.post(
+            reverse("ask"),
+            data=json.dumps({"question": "What does Part B cover?"}),
+            content_type="application/json",
+        )
+        response = self.client.get(reverse("index"))
+        # One for the greeting and one for the saved answer, none for the question.
+        self.assertContains(response, 'class="btn btn-secondary read-aloud" hidden', count=2)

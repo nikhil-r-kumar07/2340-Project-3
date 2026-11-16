@@ -86,7 +86,8 @@ async function askQuestion(question) {
   try {
     const result = await postJSON("/api/ask/", { question });
     thinking.remove();
-    addMessage("bot", result.answer, result.sources || []);
+    const answer = addMessage("bot", result.answer, result.sources || []);
+    addReadAloudButton(answer);
   } catch (error) {
     thinking.remove();
     addMessage("error", error.message || "Sorry, something went wrong. Please try again.");
@@ -153,5 +154,80 @@ contrastButton.addEventListener("click", () => {
   contrastButton.setAttribute("aria-pressed", String(turnOn));
   saveDisplay({ high_contrast: turnOn });
 });
+
+// ---------- Read aloud (Story 9) ----------
+// Uses the voice built into the browser (the Web Speech API), so there is
+// nothing to install and no cost. Browsers without it never show the button.
+const canSpeak = "speechSynthesis" in window;
+const READING_RATE = 0.9;  // a little slower than normal, easier to follow
+let readingButton = null;  // the button whose answer is being read right now
+let readingId = 0;         // changes every time reading starts or stops
+
+// The greeting's button (always on the page) is copied for each new answer.
+const readAloudTemplate = document.querySelector(".read-aloud");
+
+if (canSpeak) {
+  document.querySelectorAll(".read-aloud").forEach((button) => { button.hidden = false; });
+}
+
+function addReadAloudButton(message) {
+  const button = readAloudTemplate.cloneNode(true);
+  button.hidden = !canSpeak;
+  setReading(button, false);
+  // Put it right under the answer text, above the sources list.
+  message.querySelector(".message-text").after(button);
+}
+
+function setReading(button, isReading) {
+  button.classList.toggle("is-reading", isReading);
+  button.querySelector(".read-aloud-text").textContent = isReading ? "Stop reading" : "Read aloud";
+}
+
+function stopReading() {
+  readingId += 1;
+  if (readingButton) setReading(readingButton, false);
+  readingButton = null;
+  speechSynthesis.cancel();
+}
+
+function readAloud(button) {
+  // Clicking the same button again stops it. Clicking another one switches answers.
+  const wasReading = button === readingButton;
+  stopReading();
+  if (wasReading) return;
+
+  // Skip citation numbers like [1] so the voice doesn't say "bracket one bracket".
+  const text = button.closest(".message").querySelector(".message-text").textContent
+    .replace(/\[\d+\]/g, "");
+
+  // Some browsers (Chrome) stop after about 15 seconds of speech,
+  // so the answer is read one sentence at a time.
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  if (!sentences.length) return;
+
+  const id = readingId;
+  readingButton = button;
+  setReading(button, true);
+
+  sentences.forEach((sentence, i) => {
+    const utterance = new SpeechSynthesisUtterance(sentence);
+    utterance.lang = "en-US";
+    utterance.rate = READING_RATE;
+    if (i === sentences.length - 1) {
+      // Only reset the button if nothing else has started reading since.
+      utterance.onend = () => { if (id === readingId) stopReading(); };
+    }
+    speechSynthesis.speak(utterance);
+  });
+}
+
+// One listener for every Read aloud button, including ones added later.
+messages.addEventListener("click", (event) => {
+  const button = event.target.closest(".read-aloud");
+  if (button) readAloud(button);
+});
+
+// Stop talking when the visitor leaves or reloads the page (for example, "New chat").
+window.addEventListener("pagehide", () => { if (canSpeak) speechSynthesis.cancel(); });
 
 messages.scrollTop = messages.scrollHeight;

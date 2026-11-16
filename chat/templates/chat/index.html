@@ -27,12 +27,30 @@
       <p class="message-label">Medicare Helper</p>
       <div class="message-text">Hello! I can help you understand Medicare in plain language.
 Ask me anything about coverage, costs, or signing up.</div>
+      <!-- Read aloud (Story 9): hidden until chat.js checks the browser can speak -->
+      <button type="button" class="btn btn-secondary read-aloud" hidden>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 5 6 9H2v6h4l5 4V5z"/>
+          <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>
+        </svg>
+        <span class="read-aloud-text">Read aloud</span>
+      </button>
     </div>
 
     {% for msg in history %}
       <div class="message {% if msg.role == 'user' %}message-user{% else %}message-bot{% endif %}">
         <p class="message-label">{% if msg.role == 'user' %}You{% else %}Medicare Helper{% endif %}</p>
         <div class="message-text">{{ msg.content }}</div>
+        {% if msg.role == 'assistant' %}
+          <!-- Read aloud (Story 9): hidden until chat.js checks the browser can speak -->
+          <button type="button" class="btn btn-secondary read-aloud" hidden>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M11 5 6 9H2v6h4l5 4V5z"/>
+              <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>
+            </svg>
+            <span class="read-aloud-text">Read aloud</span>
+          </button>
+        {% endif %}
         <!-- sources list so they still show after a reload (story 4) -->
         {% if msg.sources %}
           <div class="sources">

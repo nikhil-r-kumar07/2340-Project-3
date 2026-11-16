@@ -177,6 +177,17 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .high-contrast .message-error .message-text { border-color: var(--error-text); }
 
 
+/* ---------- Read aloud button (Story 9) ---------- */
+.read-aloud {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 8px; min-height: 48px; padding: 0 16px;
+  font-size: 1rem;
+}
+.read-aloud svg { flex-shrink: 0; }
+/* Filled in while reading, like the display buttons, so it's clear the voice is on */
+.read-aloud.is-reading { background: var(--primary); color: var(--primary-text); }
+.read-aloud[hidden] { display: none; }
+
 /* sources box under answers (story 4) */
 .sources {
   margin-top: 8px;
