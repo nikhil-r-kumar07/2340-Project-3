@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Sources | Medicare Helper{% endblock %}
+
+{% block header_actions %}
+  <a href="{% url 'index' %}" class="btn btn-secondary">Back to chat</a>
+{% endblock %}
+
+{% block content %}
+<section class="source-manager" aria-labelledby="manage-sources-title">
+  <h2 id="manage-sources-title">Manage Sources</h2>
+  <p>Add local documents or public URLs to the chatbot's knowledge base. Ingest a source after adding or changing it.</p>
+
+  {% if messages %}
+    <div class="source-messages" aria-live="polite">
+      {% for message in messages %}
+        <p class="source-message source-message-{{ message.tags }}">{{ message }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <section class="source-panel" aria-labelledby="add-file-title">
+    <h3 id="add-file-title">Add a local PDF or text file</h3>
+    <form method="post" enctype="multipart/form-data" class="source-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_local">
+      <label for="local-title">Title</label>
+      <input id="local-title" name="title" type="text" maxlength="200" required>
+      <label for="local-file">PDF or TXT file</label>
+      <input id="local-file" name="file" type="file" accept=".pdf,.txt,application/pdf,text/plain" required>
+      <button class="btn btn-primary" type="submit">Add file</button>
+    </form>
+  </section>
+
+  <section class="source-panel" aria-labelledby="add-url-title">
+    <h3 id="add-url-title">Add a public URL</h3>
+    <form method="post" class="source-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_url">
+      <label for="url-title">Title</label>
+      <input id="url-title" name="title" type="text" maxlength="200" required>
+      <label for="source-url">Public URL</label>
+      <input id="source-url" name="url" type="url" placeholder="https://example.com/guide" required>
+      <button class="btn btn-primary" type="submit">Add URL</button>
+    </form>
+  </section>
+
+  <section class="source-panel" aria-labelledby="existing-sources-title">
+    <h3 id="existing-sources-title">Existing sources</h3>
+    {% if sources %}
+      <ul class="source-list">
+        {% for source in sources %}
+          <li class="source-item">
+            <div class="source-details">
+              <strong>{{ source.title }}</strong>
+              <span>{{ source.file }}</span>
+              {% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.url }}</a>{% endif %}
+            </div>
+            <form method="post" enctype="multipart/form-data" class="source-update-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="update">
+              <input type="hidden" name="file" value="{{ source.file }}">
+              <label for="title-{{ forloop.counter }}">Update title</label>
+              <input id="title-{{ forloop.counter }}" name="title" type="text" maxlength="200" value="{{ source.title }}">
+              <label for="replacement-{{ forloop.counter }}">Optional replacement PDF/TXT</label>
+              <input id="replacement-{{ forloop.counter }}" name="file" type="file" accept=".pdf,.txt,application/pdf,text/plain">
+              <button class="btn btn-secondary" type="submit">Save changes</button>
+            </form>
+            <div class="source-actions">
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="ingest">
+                <input type="hidden" name="file" value="{{ source.file }}">
+                <button class="btn btn-primary" type="submit">Ingest / Re-ingest</button>
+              </form>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="file" value="{{ source.file }}">
+                <button class="btn btn-secondary" type="submit">Remove</button>
+              </form>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No sources have been added yet.</p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

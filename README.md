@@ -40,6 +40,7 @@ A plain `pip install chromadb` installs server-only packages like kubernetes, wh
 We only use Chroma's embedded `PersistentClient`, so `requirements.txt` lists just what that needs. This comes to about 350 MB total.
 
 ## The dataset
+- Open the chatbot and select **Manage Sources** to add, update, ingest, or remove sources through the web UI.
 - `data/sources.json` lists each document's file, title, and official URL. The PDFs are in `data/docs/`.
 - Add/remove/update sources with `python manage.py sources add`, `python manage.py sources remove`, and `python manage.py sources update`. These commands keep `data/sources.json` in sync; local files are copied into `data/docs/`.
 - Local `.pdf` and UTF-8 `.txt` files are supported. Add a public `--url` source to fetch its text (or PDF) during ingestion. HTML pages are reduced to visible text.
