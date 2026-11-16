@@ -10,8 +10,45 @@ const newChatButton = document.getElementById("new-chat");
 // Django requires this token on POST requests to block cross-site attacks.
 const csrfToken = form.querySelector("[name=csrfmiddlewaretoken]").value;
 
-// Add a chat bubble. We use textContent (not innerHTML) so model output
-// can never inject HTML or scripts into the page.
+function safeHttpUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+// Append model output as text nodes, replacing only known [N] citations with
+// links assembled by the browser. Model output is never interpreted as HTML.
+function appendAnswerText(body, text, sources) {
+  const sourceByNumber = new Map(sources.map((source) => [String(source.number), source]));
+  const citationPattern = /\[(\d+)\]/g;
+  let cursor = 0;
+  let match;
+
+  while ((match = citationPattern.exec(text)) !== null) {
+    body.appendChild(document.createTextNode(text.slice(cursor, match.index)));
+    const source = sourceByNumber.get(match[1]);
+    const url = source && safeHttpUrl(source.url);
+    if (url) {
+      const link = document.createElement("a");
+      link.className = "citation-link";
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", `Open source ${match[1]}`);
+      link.textContent = match[0];
+      body.appendChild(link);
+    } else {
+      body.appendChild(document.createTextNode(match[0]));
+    }
+    cursor = citationPattern.lastIndex;
+  }
+  body.appendChild(document.createTextNode(text.slice(cursor)));
+}
+
+// Add a chat bubble.
 function addMessage(role, text, sources = []) {
   const wrapper = document.createElement("div");
   wrapper.className = role === "user" ? "message message-user" : "message message-bot";
@@ -23,7 +60,7 @@ function addMessage(role, text, sources = []) {
 
   const body = document.createElement("div");
   body.className = "message-text";
-  body.textContent = text;
+  appendAnswerText(body, text, sources);
 
   wrapper.append(label, body);
   // add sources list under answers that have them
@@ -48,8 +85,8 @@ function buildSources(sources) {
     const item = document.createElement("li");
     item.value = source.number;
     const link = document.createElement("a");
-    //only allow real http/https links so nothing like javascript: gets in
-    link.href = /^https?:\/\//.test(source.url) ? source.url : "#";
+    // Only allow real HTTP(S) links so nothing like javascript: gets in.
+    link.href = safeHttpUrl(source.url) || "#";
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = source.page ? `${source.title}, page ${source.page}` : source.title;

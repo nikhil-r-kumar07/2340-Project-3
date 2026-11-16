@@ -1,3 +1,4 @@
+import argparse
 import json
 import shutil
 from pathlib import Path
@@ -8,9 +9,41 @@ from django.core.management.base import BaseCommand, CommandError
 
 from chat import rag
 
+PREPROCESSING_BOOLEAN_OPTIONS = (
+    "normalize_unicode",
+    "remove_repeated_lines",
+    "skip_contents_index",
+    "filter_html_boilerplate",
+    "deduplicate_chunks",
+)
+
 
 def valid_file_name(file_name):
     return bool(file_name) and Path(file_name).name == file_name and Path(file_name).suffix.lower() in {".pdf", ".txt"}
+
+
+def add_preprocessing_arguments(parser):
+    for name in PREPROCESSING_BOOLEAN_OPTIONS:
+        parser.add_argument(
+            f"--{name.replace('_', '-')}",
+            action=argparse.BooleanOptionalAction,
+            default=None,
+        )
+    parser.add_argument("--minimum-chunk-length", type=int)
+
+
+def preprocessing_updates(options):
+    updates = {
+        name: options[name]
+        for name in PREPROCESSING_BOOLEAN_OPTIONS
+        if options[name] is not None
+    }
+    minimum_length = options["minimum_chunk_length"]
+    if minimum_length is not None:
+        if minimum_length < 1:
+            raise CommandError("--minimum-chunk-length must be at least 1.")
+        updates["minimum_chunk_length"] = minimum_length
+    return updates
 
 
 class Command(BaseCommand):
@@ -29,12 +62,14 @@ class Command(BaseCommand):
         add.add_argument("--title", required=True, help="Display title for citations.")
         add.add_argument("--source-url", help="Citation URL for a local file.")
         add.add_argument("--file", help="Stored filename for a URL source.")
+        add_preprocessing_arguments(add)
 
         update = actions.add_parser("update", help="Update source metadata or replace its local file.")
         update.add_argument("file", help="Current filename from the manifest.")
         update.add_argument("--title", help="New display title.")
         update.add_argument("--url", help="New public/citation URL.")
         update.add_argument("--from-file", help="Replacement local PDF or UTF-8 text file.")
+        add_preprocessing_arguments(update)
 
         remove = actions.add_parser("remove", help="Remove a source and its indexed passages.")
         remove.add_argument("file", help="Filename from the manifest.")
@@ -104,13 +139,20 @@ class Command(BaseCommand):
             "title": options["title"],
             "url": source_url,
             "source_type": source_type,
+            "preprocessing": {
+                **rag.DEFAULT_PREPROCESSING_OPTIONS,
+                **preprocessing_updates(options),
+            },
         })
         rag.save_manifest(sources)
         self.stdout.write(self.style.SUCCESS(f"Added {file_name}. Run 'python manage.py ingest --source {file_name}' to index it."))
 
     def update_source(self, sources, options):
-        if not any((options["title"], options["url"], options["from_file"])):
-            raise CommandError("Specify --title, --url, or --from-file.")
+        cleaning_updates = preprocessing_updates(options)
+        if not any((options["title"], options["url"], options["from_file"])) and not cleaning_updates:
+            raise CommandError(
+                "Specify --title, --url, --from-file, or a preprocessing option."
+            )
         source = next((item for item in sources if item["file"] == options["file"]), None)
         if source is None:
             raise CommandError(f"No source named {options['file']}.")
@@ -139,6 +181,11 @@ class Command(BaseCommand):
             source["url"] = options["url"]
             if source.get("source_type") != "local":
                 source["source_type"] = "url"
+        if cleaning_updates:
+            source["preprocessing"] = {
+                **rag.preprocessing_options(source),
+                **cleaning_updates,
+            }
 
         # Metadata is stored in each Chroma passage, so discard stale passages before re-indexing.
         rag.remove_source(old_file)

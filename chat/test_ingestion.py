@@ -68,11 +68,15 @@ class SourceCommandTests(SimpleTestCase):
         source = self.manifest()[0]
         self.assertEqual(source["file"], "guide.txt")
         self.assertEqual(source["source_type"], "local")
+        self.assertEqual(source["preprocessing"], rag.DEFAULT_PREPROCESSING_OPTIONS)
         self.assertEqual((self.data_dir / "docs" / "guide.txt").read_text(encoding="utf-8"), ARTICLE)
 
         collection = FakeCollection()
         with (
-            patch("chat.rag.get_embedder"),
+            patch(
+                "chat.rag.get_embedder",
+                return_value=SimpleNamespace(token_count=lambda text: len(text.split())),
+            ),
             patch("chat.rag.get_collection", return_value=collection),
             patch("chat.rag.embed_passages", side_effect=lambda texts: [[0.0] for _ in texts]),
             patch("chat.rag.embed_query", return_value=[0.0]),
@@ -83,9 +87,20 @@ class SourceCommandTests(SimpleTestCase):
         self.assertIn("Medicare coverage information", results[0].text)
 
         with patch("chat.management.commands.sources.rag.remove_source") as remove_source:
-            call_command("sources", "update", "guide.txt", "--title", "Updated guide")
+            call_command(
+                "sources",
+                "update",
+                "guide.txt",
+                "--title",
+                "Updated guide",
+                "--no-normalize-unicode",
+                "--minimum-chunk-length",
+                "120",
+            )
             remove_source.assert_called_once_with("guide.txt")
         self.assertEqual(self.manifest()[0]["title"], "Updated guide")
+        self.assertFalse(self.manifest()[0]["preprocessing"]["normalize_unicode"])
+        self.assertEqual(self.manifest()[0]["preprocessing"]["minimum_chunk_length"], 120)
 
         replacement = Path(self.temporary_directory.name) / "replacement.txt"
         replacement.write_text(ARTICLE + " Updated content.", encoding="utf-8")
@@ -105,7 +120,14 @@ class SourceCommandTests(SimpleTestCase):
         collection = FakeCollection()
         response = SimpleNamespace(
             headers={"Content-Type": "text/html; charset=utf-8"},
-            content=f"<html><body><main>{ARTICLE}</main><script>hidden secret</script></body></html>".encode(),
+            content=(
+                "<html><body>"
+                "<nav>navigation noise</nav>"
+                f"<main>{ARTICLE}<aside>aside noise</aside></main>"
+                "<footer>footer noise</footer>"
+                "<script>hidden secret</script>"
+                "</body></html>"
+            ).encode(),
             encoding="utf-8",
             raise_for_status=lambda: None,
         )
@@ -119,7 +141,10 @@ class SourceCommandTests(SimpleTestCase):
         )
         with (
             patch("chat.management.commands.ingest.requests.get", return_value=response),
-            patch("chat.rag.get_embedder"),
+            patch(
+                "chat.rag.get_embedder",
+                return_value=SimpleNamespace(token_count=lambda text: len(text.split())),
+            ),
             patch("chat.rag.get_collection", return_value=collection),
             patch("chat.rag.embed_passages", side_effect=lambda texts: [[0.0] for _ in texts]),
             patch("chat.rag.embed_query", return_value=[0.0]),
@@ -130,5 +155,33 @@ class SourceCommandTests(SimpleTestCase):
         self.assertTrue(results)
         self.assertIn("Medicare coverage information", results[0].text)
         self.assertNotIn("hidden secret", results[0].text)
+        self.assertNotIn("navigation noise", results[0].text)
+        self.assertNotIn("aside noise", results[0].text)
+        self.assertNotIn("footer noise", results[0].text)
         self.assertEqual(results[0].title, "Online guide")
         self.assertEqual(results[0].page, 0)
+
+    def test_duplicate_chunks_are_removed_before_embedding(self):
+        collection = FakeCollection()
+        repeated_chunk = ARTICLE * 2
+        source = {
+            "file": "guide.txt",
+            "title": "Guide",
+            "url": "",
+            "preprocessing": rag.DEFAULT_PREPROCESSING_OPTIONS,
+        }
+
+        with (
+            patch(
+                "chat.rag.read_source_pages",
+                return_value=[(1, repeated_chunk), (2, repeated_chunk)],
+            ),
+            patch("chat.rag.preprocess", side_effect=lambda pages, options: list(pages)),
+            patch("chat.rag.split_into_chunks", return_value=[repeated_chunk]),
+            patch("chat.rag.get_collection", return_value=collection),
+            patch("chat.rag.embed_passages", side_effect=lambda texts: [[0.0] for _ in texts]),
+        ):
+            count = rag.ingest_source(source)
+
+        self.assertEqual(count, 1)
+        self.assertEqual(collection.documents, [repeated_chunk])

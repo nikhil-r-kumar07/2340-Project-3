@@ -12,22 +12,50 @@ from chat import rag
 
 
 class VisibleTextParser(HTMLParser):
-    def __init__(self):
+    ALWAYS_HIDDEN_TAGS = {"script", "style"}
+    BOILERPLATE_TAGS = {"nav", "header", "footer", "form", "aside"}
+
+    def __init__(self, filter_boilerplate=True):
         super().__init__()
         self.parts = []
+        self.main_parts = []
         self.hidden_depth = 0
+        self.main_depth = 0
+        self.has_main = False
+        self.filter_boilerplate = filter_boilerplate
 
     def handle_starttag(self, tag, attrs):
-        if tag in {"script", "style"}:
+        tag = tag.lower()
+        hidden_tags = self.ALWAYS_HIDDEN_TAGS | (
+            self.BOILERPLATE_TAGS if self.filter_boilerplate else set()
+        )
+        if tag in hidden_tags:
             self.hidden_depth += 1
+        if tag == "main":
+            self.has_main = True
+            self.main_depth += 1
 
     def handle_endtag(self, tag):
-        if tag in {"script", "style"} and self.hidden_depth:
+        tag = tag.lower()
+        hidden_tags = self.ALWAYS_HIDDEN_TAGS | (
+            self.BOILERPLATE_TAGS if self.filter_boilerplate else set()
+        )
+        if tag == "main" and self.main_depth:
+            self.main_depth -= 1
+        if tag in hidden_tags and self.hidden_depth:
             self.hidden_depth -= 1
 
     def handle_data(self, data):
         if not self.hidden_depth:
             self.parts.append(data)
+            if self.main_depth:
+                self.main_parts.append(data)
+
+    @property
+    def visible_text(self):
+        if self.filter_boilerplate and self.has_main:
+            return " ".join(self.main_parts)
+        return " ".join(self.parts)
 
 
 class Command(BaseCommand):
@@ -78,10 +106,13 @@ class Command(BaseCommand):
                     or b"<html" in response.content[:1024].lower()
                     or b"<!doctype html" in response.content[:1024].lower()
                 ):
-                    parser = VisibleTextParser()
+                    options = rag.preprocessing_options(source)
+                    parser = VisibleTextParser(
+                        filter_boilerplate=options["filter_html_boilerplate"],
+                    )
                     encoding = response.encoding if "charset=" in content_type else "utf-8-sig"
                     parser.feed(response.content.decode(encoding or "utf-8", errors="replace"))
-                    path.write_text(" ".join(parser.parts), encoding="utf-8")
+                    path.write_text(parser.visible_text, encoding="utf-8")
                 else:
                     encoding = response.encoding if "charset=" in content_type else "utf-8-sig"
                     path.write_text(response.content.decode(encoding or "utf-8", errors="replace"), encoding="utf-8")

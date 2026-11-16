@@ -1,0 +1,49 @@
+<details class="cleaning-disclosure">
+  <summary>
+    <span>Cleaning options</span>
+    <small>Recommended defaults</small>
+  </summary>
+  <fieldset class="cleaning-options">
+    <legend class="visually-hidden">Cleaning options</legend>
+    <p>Saved for this source and applied during ingestion.</p>
+
+  <label for="normalize-unicode-{{ prefix }}" class="checkbox-label">
+    <input type="hidden" name="normalize_unicode" value="">
+    <input id="normalize-unicode-{{ prefix }}" name="normalize_unicode" type="checkbox"
+           {% if options.normalize_unicode %}checked{% endif %}>
+    Normalize Unicode characters
+  </label>
+
+  <label for="remove-repeated-lines-{{ prefix }}" class="checkbox-label">
+    <input type="hidden" name="remove_repeated_lines" value="">
+    <input id="remove-repeated-lines-{{ prefix }}" name="remove_repeated_lines" type="checkbox"
+           {% if options.remove_repeated_lines %}checked{% endif %}>
+    Remove repeated headers, footers, and page numbers
+  </label>
+
+  <label for="skip-contents-index-{{ prefix }}" class="checkbox-label">
+    <input type="hidden" name="skip_contents_index" value="">
+    <input id="skip-contents-index-{{ prefix }}" name="skip_contents_index" type="checkbox"
+           {% if options.skip_contents_index %}checked{% endif %}>
+    Skip contents/index pages and dot-leader lines
+  </label>
+
+  <label for="filter-html-boilerplate-{{ prefix }}" class="checkbox-label">
+    <input type="hidden" name="filter_html_boilerplate" value="">
+    <input id="filter-html-boilerplate-{{ prefix }}" name="filter_html_boilerplate" type="checkbox"
+           {% if options.filter_html_boilerplate %}checked{% endif %}>
+    Remove navigation, headers, footers, forms, and asides from HTML
+  </label>
+
+  <label for="deduplicate-chunks-{{ prefix }}" class="checkbox-label">
+    <input type="hidden" name="deduplicate_chunks" value="">
+    <input id="deduplicate-chunks-{{ prefix }}" name="deduplicate_chunks" type="checkbox"
+           {% if options.deduplicate_chunks %}checked{% endif %}>
+    Remove duplicate chunks
+  </label>
+
+    <label for="minimum-chunk-length-{{ prefix }}">Minimum chunk length (characters)</label>
+    <input id="minimum-chunk-length-{{ prefix }}" name="minimum_chunk_length" type="number"
+           min="1" max="5000" value="{{ options.minimum_chunk_length }}">
+  </fieldset>
+</details>

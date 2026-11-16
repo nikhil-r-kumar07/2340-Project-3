@@ -1,8 +1,17 @@
 {% extends "base.html" %}
 {% load static %}
+{% load chat_extras %}
 
 {% block header_actions %}
-  <a href="{% url 'manage_sources' %}" class="btn btn-secondary">Manage Sources</a>
+  {% if request.user.is_staff %}
+    <a href="{% url 'manage_sources' %}" class="btn btn-secondary">Manage Sources</a>
+    <form method="post" action="{% url 'developer_logout' %}" class="header-form">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-secondary">Developer logout</button>
+    </form>
+  {% else %}
+    <a href="{% url 'developer_login' %}" class="btn btn-secondary">Developer login</a>
+  {% endif %}
   <button type="button" id="new-chat" class="btn btn-secondary">New chat</button>
 {% endblock %}
 
@@ -41,7 +50,7 @@ Ask me anything about coverage, costs, or signing up.</div>
     {% for msg in history %}
       <div class="message {% if msg.role == 'user' %}message-user{% else %}message-bot{% endif %}">
         <p class="message-label">{% if msg.role == 'user' %}You{% else %}Medicare Helper{% endif %}</p>
-        <div class="message-text">{{ msg.content }}</div>
+        <div class="message-text">{% if msg.role == 'assistant' %}{% linked_citations msg.content msg.sources %}{% else %}{{ msg.content }}{% endif %}</div>
         {% if msg.role == 'assistant' %}
           <!-- Read aloud (Story 9): hidden until chat.js checks the browser can speak -->
           <button type="button" class="btn btn-secondary read-aloud" hidden>

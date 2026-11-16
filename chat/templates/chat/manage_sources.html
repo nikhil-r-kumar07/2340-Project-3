@@ -1,15 +1,30 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Manage Sources | Medicare Helper{% endblock %}
+{% block title %}Knowledge Base | Medicare Helper{% endblock %}
 
 {% block header_actions %}
   <a href="{% url 'index' %}" class="btn btn-secondary">Back to chat</a>
+  <form method="post" action="{% url 'developer_logout' %}" class="header-form">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-secondary">Developer logout</button>
+  </form>
 {% endblock %}
 
 {% block content %}
 <section class="source-manager" aria-labelledby="manage-sources-title">
-  <h2 id="manage-sources-title">Manage Sources</h2>
-  <p>Add local documents or public URLs to the chatbot's knowledge base. Ingest a source after adding or changing it.</p>
+  <header class="developer-hero">
+    <div>
+      <p class="eyebrow">Developer workspace</p>
+      <h2 id="manage-sources-title">Knowledge base</h2>
+      <p>Add trusted material, review what is configured, and control what the chatbot can search.</p>
+    </div>
+    <div class="source-summary" aria-label="Knowledge base summary">
+      <div><strong>{{ source_count }}</strong><span>Configured</span></div>
+      <div><strong>{{ indexed_count }}</strong><span>Indexed</span></div>
+      <div><strong>{% if index_status_available %}{{ pending_count }}{% else %}—{% endif %}</strong><span>Needs ingestion</span></div>
+    </div>
+  </header>
 
   {% if messages %}
     <div class="source-messages" aria-live="polite">
@@ -19,73 +34,179 @@
     </div>
   {% endif %}
 
-  <section class="source-panel" aria-labelledby="add-file-title">
-    <h3 id="add-file-title">Add a local PDF or text file</h3>
-    <form method="post" enctype="multipart/form-data" class="source-form">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="add_local">
-      <label for="local-title">Title</label>
-      <input id="local-title" name="title" type="text" maxlength="200" required>
-      <label for="local-file">PDF or TXT file</label>
-      <input id="local-file" name="file" type="file" accept=".pdf,.txt,application/pdf,text/plain" required>
-      <button class="btn btn-primary" type="submit">Add file</button>
-    </form>
+  <section class="developer-section" aria-labelledby="add-source-title">
+    <div class="section-heading">
+      <span class="step-number" aria-hidden="true">1</span>
+      <div>
+        <h3 id="add-source-title">Add a source</h3>
+        <p>Choose one input method. New sources are saved first, then appear in the library ready to ingest.</p>
+      </div>
+    </div>
+
+    <div class="source-tabs" role="tablist" aria-label="Source input type">
+      <button type="button" class="source-tab is-active" role="tab" aria-selected="true"
+              aria-controls="local-source-panel" id="local-source-tab" data-source-tab="local-source-panel">
+        Upload a file
+      </button>
+      <button type="button" class="source-tab" role="tab" aria-selected="false"
+              aria-controls="url-source-panel" id="url-source-tab" data-source-tab="url-source-panel">
+        Add a public URL
+      </button>
+    </div>
+
+    <div class="add-source-panel" id="local-source-panel" role="tabpanel" aria-labelledby="local-source-tab">
+      <div class="form-intro">
+        <strong>Local document</strong>
+        <span>PDF or UTF-8 text file</span>
+      </div>
+      <form method="post" enctype="multipart/form-data" class="source-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_local">
+        <div class="form-field">
+          <label for="local-title">Source title</label>
+          <input id="local-title" name="title" type="text" maxlength="200"
+                 placeholder="Example: 2026 Medicare Benefits Guide" required>
+        </div>
+        <div class="form-field">
+          <label for="local-file">Document</label>
+          <input id="local-file" name="file" type="file"
+                 accept=".pdf,.txt,application/pdf,text/plain" required>
+        </div>
+        {% include "chat/preprocessing_fields.html" with prefix="local" options=preprocessing_defaults %}
+        <button class="btn btn-primary" type="submit" data-busy-label="Adding source…">Add to library</button>
+      </form>
+    </div>
+
+    <div class="add-source-panel" id="url-source-panel" role="tabpanel"
+         aria-labelledby="url-source-tab" hidden>
+      <div class="form-intro">
+        <strong>Public web source</strong>
+        <span>HTML page, PDF, or text URL</span>
+      </div>
+      <form method="post" class="source-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="add_url">
+        <div class="form-field">
+          <label for="url-title">Source title</label>
+          <input id="url-title" name="title" type="text" maxlength="200"
+                 placeholder="Example: Medicare enrollment overview" required>
+        </div>
+        <div class="form-field">
+          <label for="source-url">Public URL</label>
+          <input id="source-url" name="url" type="url"
+                 placeholder="https://www.medicare.gov/…" required>
+        </div>
+        {% include "chat/preprocessing_fields.html" with prefix="url" options=preprocessing_defaults %}
+        <button class="btn btn-primary" type="submit" data-busy-label="Adding source…">Add to library</button>
+      </form>
+    </div>
   </section>
 
-  <section class="source-panel" aria-labelledby="add-url-title">
-    <h3 id="add-url-title">Add a public URL</h3>
-    <form method="post" class="source-form">
-      {% csrf_token %}
-      <input type="hidden" name="action" value="add_url">
-      <label for="url-title">Title</label>
-      <input id="url-title" name="title" type="text" maxlength="200" required>
-      <label for="source-url">Public URL</label>
-      <input id="source-url" name="url" type="url" placeholder="https://example.com/guide" required>
-      <button class="btn btn-primary" type="submit">Add URL</button>
-    </form>
-  </section>
+  <section class="developer-section source-library" aria-labelledby="source-library-title">
+    <div class="section-heading">
+      <span class="step-number" aria-hidden="true">2</span>
+      <div>
+        <h3 id="source-library-title">Source library</h3>
+        <p>Ingest pending sources to make them searchable. Re-ingest after changing content or cleaning rules.</p>
+      </div>
+    </div>
 
-  <section class="source-panel" aria-labelledby="existing-sources-title">
-    <h3 id="existing-sources-title">Existing sources</h3>
     {% if sources %}
-      <ul class="source-list">
+      <div class="source-filters" role="group" aria-label="Filter sources">
+        <button type="button" class="source-filter is-active" data-source-filter="all" aria-pressed="true">
+          All <span>{{ source_count }}</span>
+        </button>
+        <button type="button" class="source-filter" data-source-filter="pending" aria-pressed="false">
+          Needs ingestion <span>{{ pending_count }}</span>
+        </button>
+        <button type="button" class="source-filter" data-source-filter="indexed" aria-pressed="false">
+          Indexed <span>{{ indexed_count }}</span>
+        </button>
+      </div>
+
+      <ul class="source-grid" id="source-grid">
         {% for source in sources %}
-          <li class="source-item">
-            <div class="source-details">
-              <strong>{{ source.title }}</strong>
-              <span>{{ source.file }}</span>
-              {% if source.url %}<a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.url }}</a>{% endif %}
+          <li class="source-card" data-source-status="{{ source.index_status }}">
+            <div class="source-card-header">
+              <div>
+                <div class="source-card-labels">
+                  <span class="source-type">{% if source.source_type == "url" %}Public URL{% else %}Local file{% endif %}</span>
+                  {% if source.index_status == "indexed" %}
+                    <span class="status-pill status-indexed">Indexed</span>
+                  {% elif source.index_status == "pending" %}
+                    <span class="status-pill status-pending">Needs ingestion</span>
+                  {% else %}
+                    <span class="status-pill status-unknown">Status unavailable</span>
+                  {% endif %}
+                </div>
+                <h4>{{ source.title }}</h4>
+                <p class="source-filename">{{ source.file }}</p>
+              </div>
+              {% if source.url %}
+                <a class="source-external-link" href="{{ source.url }}" target="_blank"
+                   rel="noopener noreferrer" aria-label="Open {{ source.title }} source">
+                  Open source <span aria-hidden="true">↗</span>
+                </a>
+              {% endif %}
             </div>
-            <form method="post" enctype="multipart/form-data" class="source-update-form">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="update">
-              <input type="hidden" name="file" value="{{ source.file }}">
-              <label for="title-{{ forloop.counter }}">Update title</label>
-              <input id="title-{{ forloop.counter }}" name="title" type="text" maxlength="200" value="{{ source.title }}">
-              <label for="replacement-{{ forloop.counter }}">Optional replacement PDF/TXT</label>
-              <input id="replacement-{{ forloop.counter }}" name="file" type="file" accept=".pdf,.txt,application/pdf,text/plain">
-              <button class="btn btn-secondary" type="submit">Save changes</button>
-            </form>
-            <div class="source-actions">
-              <form method="post">
+
+            <div class="source-primary-actions">
+              <form method="post" class="ingest-form">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="ingest">
                 <input type="hidden" name="file" value="{{ source.file }}">
-                <button class="btn btn-primary" type="submit">Ingest / Re-ingest</button>
+                <button class="btn btn-primary" type="submit" data-busy-label="Ingesting…">
+                  {% if source.index_status == "indexed" %}Re-ingest source{% else %}Ingest source{% endif %}
+                </button>
               </form>
-              <form method="post">
+              <details class="source-editor">
+                <summary>Edit source and cleaning</summary>
+                <form method="post" enctype="multipart/form-data" class="source-update-form">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="update">
+                  <input type="hidden" name="file" value="{{ source.file }}">
+                  <div class="form-field">
+                    <label for="title-{{ forloop.counter }}">Title</label>
+                    <input id="title-{{ forloop.counter }}" name="title" type="text"
+                           maxlength="200" value="{{ source.title }}">
+                  </div>
+                  <div class="form-field">
+                    <label for="url-{{ forloop.counter }}">{% if source.source_type == "url" %}Public source URL{% else %}Optional citation URL{% endif %}</label>
+                    <input id="url-{{ forloop.counter }}" name="url" type="url"
+                           value="{{ source.url|default:'' }}" placeholder="https://example.com/guide">
+                  </div>
+                  <div class="form-field">
+                    <label for="replacement-{{ forloop.counter }}">Optional replacement PDF/TXT</label>
+                    <input id="replacement-{{ forloop.counter }}" name="file" type="file"
+                           accept=".pdf,.txt,application/pdf,text/plain">
+                  </div>
+                  {% include "chat/preprocessing_fields.html" with prefix=forloop.counter options=source.preprocessing %}
+                  <div class="editor-actions">
+                    <button class="btn btn-secondary" type="submit" data-busy-label="Saving…">Save changes</button>
+                  </div>
+                </form>
+              </details>
+              <form method="post" class="remove-source-form" data-source-title="{{ source.title }}">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="file" value="{{ source.file }}">
-                <button class="btn btn-secondary" type="submit">Remove</button>
+                <button class="text-button text-button-danger" type="submit">Remove</button>
               </form>
             </div>
           </li>
         {% endfor %}
       </ul>
+      <p class="empty-filter-message" id="empty-filter-message" hidden>No sources match this filter.</p>
     {% else %}
-      <p>No sources have been added yet.</p>
+      <div class="empty-library">
+        <h4>Your source library is empty</h4>
+        <p>Add a local document or public URL above. It will appear here ready to ingest.</p>
+      </div>
     {% endif %}
   </section>
 </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'chat/sources.js' %}"></script>
 {% endblock %}

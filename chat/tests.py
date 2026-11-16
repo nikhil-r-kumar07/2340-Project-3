@@ -165,20 +165,105 @@ class AskApiTests(TestCase):
         response = self.client.get(reverse("index"))
         self.assertContains(response, "Where this answer came from")
         self.assertContains(response, "10050-medicare-and-you.pdf#page=5")
+        self.assertContains(
+            response,
+            'class="citation-link" href="https://www.medicare.gov/'
+            'publications/10050-medicare-and-you.pdf#page=5"',
+        )
+
+    def test_linked_citations_keep_model_output_escaped(self):
+        session = self.client.session
+        session["history"] = [{
+            "role": "assistant",
+            "content": '<script>alert("unsafe")</script> See [1].',
+            "sources": [{
+                "number": 1,
+                "title": "Medicare & You",
+                "page": 5,
+                "url": "https://example.com/guide.pdf#page=5",
+            }],
+        }]
+        session.save()
+
+        response = self.client.get(reverse("index"))
+
+        self.assertNotContains(response, '<script>alert("unsafe")</script>')
+        self.assertContains(response, "&lt;script&gt;")
+        self.assertContains(
+            response,
+            'class="citation-link" href="https://example.com/guide.pdf#page=5"',
+        )
 
 
 #tests for the helper functions in rag.py
 class RagHelperTests(TestCase):
+    def test_clean_text_normalizes_unicode_and_control_characters(self):
+        cleaned = rag.clean_text(
+            "The ﬁrst “Medicare” guide…\u00a0has odd\u0000 text\ufffd."
+        )
+
+        self.assertEqual(
+            cleaned,
+            'The first "Medicare" guide... has odd text.',
+        )
+
+    def test_preprocess_removes_repeated_page_furniture(self):
+        pages = [
+            (
+                page,
+                f"Medicare Handbook 2026 - Page {page}\n"
+                f"Unique coverage guidance for page {page}.\n"
+                f"Page {page}",
+            )
+            for page in range(1, 5)
+        ]
+
+        cleaned = rag.preprocess(pages)
+
+        self.assertEqual(len(cleaned), 4)
+        self.assertTrue(all("Medicare Handbook" not in text for _, text in cleaned))
+        self.assertTrue(all(f"Page {page}" not in text for page, text in cleaned))
+        self.assertIn("Unique coverage guidance for page 3.", dict(cleaned)[3])
+
+    def test_preprocess_skips_contents_pages_and_dot_leaders(self):
+        pages = [
+            (
+                1,
+                "Table of Contents\n"
+                "Part A ................................ 4\n"
+                "Part B ................................ 8\n"
+                "Part D ................................ 12",
+            ),
+            (2, "Benefits overview\nCovered services are described in this section."),
+        ]
+
+        cleaned = rag.preprocess(pages)
+
+        self.assertEqual(cleaned, [
+            (2, "Benefits overview\nCovered services are described in this section."),
+        ])
+
     def test_chunks_are_limited_in_size_and_overlap(self):
         text = " ".join(f"Sentence number {i} is about Medicare." for i in range(200))
-        chunks = rag.split_into_chunks(text, size=300, overlap=50)
+        word_count = lambda value: len(value.split())
+        chunks = rag.split_into_chunks(
+            text,
+            size=40,
+            overlap=8,
+            token_counter=word_count,
+        )
         self.assertGreater(len(chunks), 1)
-        self.assertTrue(all(len(c) <= 300 for c in chunks))
-        #neighboring chunks share some text so ideas dont get cut in half
-        self.assertIn(chunks[0][-20:].split()[-1], chunks[1])
+        self.assertTrue(all(word_count(chunk) <= 40 for chunk in chunks))
+        # Neighboring chunks retain a complete shared sentence.
+        first_sentences = {sentence.rstrip(".") for sentence in chunks[0].split(". ")}
+        second_sentences = {sentence.rstrip(".") for sentence in chunks[1].split(". ")}
+        self.assertTrue(first_sentences & second_sentences)
 
     def test_short_text_is_skipped(self):
-        self.assertEqual(rag.split_into_chunks("Page 4"), [])
+        self.assertEqual(
+            rag.split_into_chunks("Page 4", token_counter=lambda value: len(value.split())),
+            [],
+        )
 
     def test_number_sources_shares_numbers_for_same_page(self):
         passages = [fake_passage(page=1), fake_passage(page=2), fake_passage(page=1)]

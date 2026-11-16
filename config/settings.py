@@ -14,10 +14,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load variables from .env into os.environ
 load_dotenv(BASE_DIR / ".env")
 
+
+def env_bool(name, default=False):
+    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name, default=""):
+    return [value.strip() for value in os.getenv(name, default).split(",") if value.strip()]
+
+
 # `or` also covers a blank value like SECRET_KEY="" in .env
 SECRET_KEY = os.getenv("SECRET_KEY") or "dev-only-insecure-key"
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost").split(",") if h.strip()]
+DEBUG = env_bool("DEBUG")
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "127.0.0.1,localhost")
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -61,7 +71,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": Path(os.getenv("DATABASE_PATH", BASE_DIR / "db.sqlite3")).expanduser(),
     }
 }
 
@@ -77,8 +87,18 @@ TIME_ZONE = "America/New_York"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # used by `collectstatic` when deploying
+
+# Enable these in production after HTTPS is active. Keeping them environment-driven
+# lets the local HTTP development server continue to work.
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT")
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", SECURE_SSL_REDIRECT)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", SECURE_SSL_REDIRECT)
+SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool("SECURE_HSTS_INCLUDE_SUBDOMAINS")
+SECURE_HSTS_PRELOAD = env_bool("SECURE_HSTS_PRELOAD")
+SILENCED_SYSTEM_CHECKS = env_list("SILENCED_SYSTEM_CHECKS")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -88,10 +108,10 @@ LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-oss-120b")
 LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "")
 
-# Rag settings (stories 3 + 4)
-DATA_DIR = BASE_DIR / "data" #sources.json and its listed pdfs
-CHROMA_DIR = BASE_DIR / "chroma_db" #ChromaDB's on disk vector store
-EMBED_CACHE_DIR = BASE_DIR / ".model_cache" #fastembed model files
+# RAG settings (stories 3 + 4). All paths must be on persistent, writable storage.
+DATA_DIR = Path(os.getenv("DATA_DIR", BASE_DIR / "data")).expanduser()
+CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "chroma_db")).expanduser()
+EMBED_CACHE_DIR = Path(os.getenv("EMBED_CACHE_DIR", BASE_DIR / ".model_cache")).expanduser()
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
-RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4")) #passages given to the model per question
-RAG_MAX_DISTANCE = float(os.getenv("RAG_MAX_DISTANCE", "0.45")) #max rag distance. passages past this is ignored
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "4"))  # passages given to the model per question
+RAG_MAX_DISTANCE = float(os.getenv("RAG_MAX_DISTANCE", "0.45"))  # ignore passages beyond this

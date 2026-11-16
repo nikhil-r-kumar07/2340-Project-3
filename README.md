@@ -17,7 +17,7 @@ CS 2340 Project 3.
 - **Plain HTML/CSS/JavaScript:** no build step.
 - **LLM:** OpenAI's open-weights `gpt-oss-120b`, hosted free on [Groq](https://console.groq.com).
   - It's called through the standard OpenAI-compatible chat API using `requests` (`chat/llm.py`).
-- **RAG:** ChromaDB vector store + `BAAI/bge-small-en-v1.5` embeddings run through fastembed (ONNX, so no PyTorch), with `pypdf` for reading PDFs.
+- **RAG:** ChromaDB vector store + `BAAI/bge-small-en-v1.5` embeddings run through fastembed (ONNX, so no PyTorch), `semchunk` for token-aware semantic chunking, and `pypdf` for reading PDFs.
 
 ## Setup
 ```bash
@@ -27,12 +27,17 @@ pip install -r requirements.txt
 pip install --no-deps "chromadb==1.5.*"
 cp .env.example .env              # then put your own Groq API key in .env
 python manage.py migrate
+python manage.py createsuperuser     # creates a staff developer account
 python manage.py ingest
 python manage.py runserver
 ```
 Open http://127.0.0.1:8000.
 
 Each teammate should create their own free Groq key, since rate limits are per key.
+Developers can sign in at http://127.0.0.1:8000/developer/login/ with their
+staff account; this is separate from Django Admin. After signing in, the chat
+header shows **Manage Sources** and **Developer logout**. Anonymous
+visitors and non-staff accounts receive a 403 response at `/sources/`.
 
 
 ### Why `--no-deps` for ChromaDB?
@@ -40,10 +45,12 @@ A plain `pip install chromadb` installs server-only packages like kubernetes, wh
 We only use Chroma's embedded `PersistentClient`, so `requirements.txt` lists just what that needs. This comes to about 350 MB total.
 
 ## The dataset
-- Open the chatbot and select **Manage Sources** to add, update, ingest, or remove sources through the web UI.
+- Sign in with a Django staff account, open the chatbot, and select **Manage Sources** to add, update, ingest, or remove sources through the web UI.
+- The developer workspace separates adding from ingestion, shows indexed/pending counts, filters the source library by status, and keeps editing and cleaning controls collapsed until needed.
 - `data/sources.json` lists each document's file, title, and official URL. The PDFs are in `data/docs/`.
 - Add/remove/update sources with `python manage.py sources add`, `python manage.py sources remove`, and `python manage.py sources update`. These commands keep `data/sources.json` in sync; local files are copied into `data/docs/`.
 - Local `.pdf` and UTF-8 `.txt` files are supported. Add a public `--url` source to fetch its text (or PDF) during ingestion. HTML pages are reduced to visible text.
+- Adding or updating a source changes the catalog first. Select **Ingest / Re-ingest** to download URL content when needed, split it into passages, and refresh its ChromaDB embeddings.
 - Run `python manage.py ingest` to refresh every source, or `python manage.py ingest --source FILE` to ingest one. URL sources are fetched again each time; existing URL-based sources are downloaded when their local file is missing.
 - `python manage.py ingest --reset` rebuilds the store from scratch.
 - Current documents (all from medicare.gov/publications): Medicare & You, Your Medicare Benefits, Medicare Costs, Understanding Medicare Advantage Plans, Your Guide to Medicare Prescription Drug Coverage, Choosing a Medigap Policy.
@@ -88,6 +95,20 @@ python manage.py test chat
 ```
 The tests use a fake model, so they need no internet connection or API key. They also use fake search so they need no `manage.py ingest`.
 
+## Deployment
+Production deployment is configured for
+`https://medicarehelper.pythonanywhere.com`. Follow
+[`DEPLOYMENT.md`](DEPLOYMENT.md), starting from `.env.production.example`.
+Before reloading the production web app, run:
+
+```bash
+python manage.py deployment_check
+```
+
+This checks Django security settings, RAG dependencies, persistent storage,
+collected static files, the source manifest and index, the database, the LLM key,
+and the developer account.
+
 ## How a question flows
 1. `chat/static/chat/chat.js` sends the question to `POST /api/ask/`.
 2. `chat/views.py` (`ask`) checks the question.
@@ -97,7 +118,23 @@ The tests use a fake model, so they need no internet connection or API key. They
 4. `chat/prompts.py` (`build_system_prompt`) puts the numbered passages in the system prompt, telling the model to answer only from them and cite them like [1].
 5. `chat/llm.py` (`chat_completion`) sends system prompt + last 10 messages + the question to the LLM.
 6. The view keeps only the sources the answer cites, saves the conversation, and returns `{answer, sources}`.
-   - The page shows each source as a link to the PDF page.
+   - Citation numbers such as `[1]` are clickable links to the exact source page, and the full source list remains below the answer.
+
+### RAG chunking
+- Before chunking, each source applies its saved cleaning profile: Unicode normalization, repeated header/footer/page-number removal, contents/index and dot-leader filtering, HTML boilerplate removal, duplicate-chunk removal, and a configurable minimum chunk length.
+- HTML ingestion keeps `<main>` when present; otherwise it excludes scripts, styles, navigation, headers, footers, forms, and asides.
+- Developers can change these options per source on **Manage Sources**. Legacy manifest entries use all recommended defaults automatically.
+- SemChunk splits each page on semantic boundaries using the embedding model's own tokenizer.
+- Chunks are capped at 384 BGE tokens with a 64-token overlap, safely below the model's 512-token limit.
+- On the current eight-source corpus, preprocessing produces 699 chunks: 260 tokens on average, 344 tokens at the 95th percentile, and 370 tokens at maximum. No evaluated chunk exceeded the configured limit.
+
+## How source management flows
+1. Django authentication identifies the current user; only users with `is_staff=True` can access `/sources/`.
+2. The source page validates local PDF/TXT uploads and public HTTP(S) URLs.
+3. `chat/views.py` delegates add, update, and remove operations to the `sources` management command.
+4. `data/sources.json` remains the catalog, while local or downloaded content is stored in `data/docs/`.
+5. Ingest/re-ingest delegates to the `ingest` command, which chunks and embeds the selected content into ChromaDB.
+6. Removal deletes the manifest entry, stored file, and indexed passages.
 
 ## Display settings (Story 8)
 - The bar above the chat has **Text size** (Normal / Large / Extra large) and **High contrast** buttons.
@@ -122,14 +159,12 @@ The tests use a fake model, so they need no internet connection or API key. They
 | `chat/templates/chat/index.html` | Chat page | 1 |
 | `chat/static/chat/style.css` | Styles: large text, high legibility, mobile-friendly, text-size and high-contrast modes, Read aloud button | 1, 8, 9 |
 | `chat/static/chat/chat.js` | Sends questions and shows answers without reloading; display settings buttons; Read aloud | 1, 8, 9 |
-| `chat/views.py` | `index`, `ask`, `reset` and `display` endpoints | 2, 8 |
+| `chat/views.py` | Chat APIs and staff-only source management | 2, 8 |
+| `chat/forms.py` | Validation for local files, public URLs, and source updates | 3 |
+| `chat/templates/chat/manage_sources.html` | Staff source-management page | 3 |
 | `chat/llm.py` | The only code that talks to the LLM | 2 |
 | `chat/prompts.py` | System prompt: plain language, Medicare-only, safe | 2 |
-| `chat/tests.py` | Automated tests | 2-4, 8, 9 |
+| `chat/tests.py`, `chat/test_sources_ui.py`, `chat/test_ingestion.py` | Automated chat, authorization, source, and ingestion tests | 2-4, 8, 9 |
 | `chat/rag.py` | Embeddings, ChromaDB, chunking, search | 3 |
 | `chat/management/commands/ingest.py` | `manage.py ingest`: loads `data/` into ChromaDB | 3 |
 | `data/sources.json`, `data/docs/` | The curated Medicare.gov dataset | 3 |
-
-## Coming next
-- Admin controls.
-- Deployment to PythonAnywhere.

@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.http import JsonResponse
@@ -23,7 +24,12 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
 from . import rag
-from .forms import LocalSourceForm, UpdateSourceForm, UrlSourceForm
+from .forms import (
+    PREPROCESSING_BOOLEAN_FIELDS,
+    LocalSourceForm,
+    UpdateSourceForm,
+    UrlSourceForm,
+)
 from .llm import LLMError, chat_completion
 from .prompts import build_system_prompt
 
@@ -64,6 +70,9 @@ def index(request):
 
 
 def manage_sources(request):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        raise PermissionDenied
+
     if request.method == "POST":
         action = request.POST.get("action")
         try:
@@ -76,20 +85,32 @@ def manage_sources(request):
                         with uploaded_path.open("wb") as destination:
                             for chunk in upload.chunks():
                                 destination.write(chunk)
-                        call_command(
+                        command_args = [
                             "sources", "add", "--local", str(uploaded_path),
                             "--title", form.cleaned_data["title"],
+                        ]
+                        _append_preprocessing_args(
+                            command_args,
+                            form.cleaned_data,
+                            request.POST,
                         )
+                        call_command(*command_args)
                     messages.success(request, "Source added. Ingest it to make it searchable.")
                 else:
                     messages.error(request, _form_errors(form))
             elif action == "add_url":
                 form = UrlSourceForm(request.POST)
                 if form.is_valid():
-                    call_command(
+                    command_args = [
                         "sources", "add", "--url", form.cleaned_data["url"],
                         "--title", form.cleaned_data["title"],
+                    ]
+                    _append_preprocessing_args(
+                        command_args,
+                        form.cleaned_data,
+                        request.POST,
                     )
+                    call_command(*command_args)
                     messages.success(request, "URL source added. Ingest it to make it searchable.")
                 else:
                     messages.error(request, _form_errors(form))
@@ -100,6 +121,13 @@ def manage_sources(request):
                     command_args = ["sources", "update", file_name]
                     if form.cleaned_data["title"]:
                         command_args.extend(["--title", form.cleaned_data["title"]])
+                    if form.cleaned_data["url"]:
+                        command_args.extend(["--url", form.cleaned_data["url"]])
+                    _append_preprocessing_args(
+                        command_args,
+                        form.cleaned_data,
+                        request.POST,
+                    )
                     upload = form.cleaned_data["file"]
                     if upload:
                         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -137,7 +165,47 @@ def manage_sources(request):
     except json.JSONDecodeError as error:
         sources = []
         messages.error(request, f"Could not read data/sources.json: {error}")
-    return render(request, "chat/manage_sources.html", {"sources": sources})
+
+    try:
+        indexed_files = rag.indexed_source_files()
+    except Exception:
+        logger.exception("Could not read source indexing status")
+        indexed_files = None
+
+    for source in sources:
+        source["preprocessing"] = rag.preprocessing_options(source)
+        if indexed_files is None:
+            source["index_status"] = "unknown"
+        elif source["file"] in indexed_files:
+            source["index_status"] = "indexed"
+        else:
+            source["index_status"] = "pending"
+
+    indexed_count = sum(source["index_status"] == "indexed" for source in sources)
+    pending_count = sum(source["index_status"] == "pending" for source in sources)
+    return render(request, "chat/manage_sources.html", {
+        "sources": sources,
+        "preprocessing_defaults": rag.DEFAULT_PREPROCESSING_OPTIONS,
+        "source_count": len(sources),
+        "indexed_count": indexed_count,
+        "pending_count": pending_count,
+        "index_status_available": indexed_files is not None,
+    })
+
+
+def _append_preprocessing_args(command_args, cleaned_data, submitted_data):
+    for field in PREPROCESSING_BOOLEAN_FIELDS:
+        if field in submitted_data:
+            option = field.replace("_", "-")
+            command_args.append(f"--{option}" if cleaned_data[field] else f"--no-{option}")
+    if (
+        "minimum_chunk_length" in submitted_data
+        and cleaned_data.get("minimum_chunk_length") is not None
+    ):
+        command_args.extend([
+            "--minimum-chunk-length",
+            str(cleaned_data["minimum_chunk_length"]),
+        ])
 
 
 def _form_errors(form):
