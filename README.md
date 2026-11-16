@@ -109,6 +109,7 @@ This checks Django security settings, RAG dependencies, persistent storage,
 collected static files, the source manifest and index, the database, the LLM key,
 and the developer account.
 
+
 ## How a question flows
 1. `chat/static/chat/chat.js` sends the question to `POST /api/ask/`.
 2. `chat/views.py` (`ask`) checks the question.
