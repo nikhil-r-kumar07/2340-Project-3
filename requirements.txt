@@ -8,6 +8,7 @@ semchunk>=4.1,<5.0       # token-aware semantic chunking for RAG passages
 
 #ChromaDB is installed separately with no dependencies because its full dependency list includes server-only packages which blows past PythonAnywhere's disk quota.
 #List of things the embedded client needs
+numpy>=1.26,<3
 pydantic>=2.0
 pydantic-settings>=2.0
 overrides>=7.3
