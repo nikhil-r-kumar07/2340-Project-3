@@ -35,26 +35,28 @@
 :root.text-large  { --text-scale: 125%; }
 :root.text-larger { --text-scale: 150%; }
 
-/* High contrast: pure black and white with bright yellow, well past WCAG AAA (7:1) */
+/* High contrast uses a softened dark palette instead of harsh black, white, and
+ * neon accents. Text combinations remain above WCAG AAA while surfaces and
+ * message bubbles stay visually distinct. */
 :root.high-contrast {
-  --bg: #000000;
-  --surface: #000000;
-  --text: #ffffff;
-  --muted: #ffffff;
-  --border: #ffffff;
+  --bg: #101820;
+  --surface: #1b2733;
+  --text: #f5f7fa;
+  --muted: #c7d0d9;
+  --border: #71808c;
 
-  --primary: #ffd60a;
-  --primary-hover: #ffffff;
-  --primary-text: #000000;
-  --user-bubble: #ffd60a;
-  --user-text: #000000;
-  --bot-bubble: #000000;
-  --bot-text: #ffffff;
-  --focus: #00e5ff;
-  --error-bg: #000000;
-  --error-text: #ff9e9e;
+  --primary: #e8bd69;
+  --primary-hover: #f3d18a;
+  --primary-text: #101820;
+  --user-bubble: #2b567a;
+  --user-text: #ffffff;
+  --bot-bubble: #243747;
+  --bot-text: #f5f7fa;
+  --focus: #9ecbff;
+  --error-bg: #3b2327;
+  --error-text: #ffc1c1;
 
-  --shadow: none;
+  --shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
 }
 
 html { font-size: var(--text-scale); }
@@ -425,6 +427,11 @@ main.container { flex: 1; padding-top: 24px; padding-bottom: 24px; }
 .status-indexed { border-color: var(--primary); background: var(--bot-bubble); color: var(--primary); }
 .status-pending { border-color: #b7791f; background: #fff7df; color: #704500; }
 .status-unknown { color: var(--muted); }
+.high-contrast .status-pending {
+  border-color: var(--primary);
+  background: #3b3223;
+  color: #f3d18a;
+}
 .source-filename { margin: 0; color: var(--muted); font-size: 0.9rem; overflow-wrap: anywhere; }
 .source-external-link {
   flex: 0 0 auto;
